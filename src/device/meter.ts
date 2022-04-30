@@ -252,7 +252,7 @@ export class Meter {
     if (!this.device.meter?.hide_temperature) {
       this.temperature < 0 ? 0 : this.temperature > 100 ? 100 : this.temperature;
       this.CurrentTemperature = this.temperature;
-      this.debugLog(`Meter: ${this.accessory.displayName} Temperature: ${this.CurrentTemperature}Â°c`);
+      this.debugLog(`Meter: ${this.accessory.displayName} Temperature: ${this.CurrentTemperature}‹c`);
     }
   }
 
@@ -271,7 +271,7 @@ export class Meter {
       // Current Temperature
       if (!this.device.meter?.hide_temperature) {
         this.CurrentTemperature = this.Temperature!;
-        this.debugLog(`Meter: ${this.accessory.displayName} Temperature: ${this.CurrentTemperature}Â°c`);
+        this.debugLog(`Meter: ${this.accessory.displayName} Temperature: ${this.CurrentTemperature}‹c`);
       }
     }
   }
