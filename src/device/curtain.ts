@@ -170,9 +170,6 @@ export class Curtain {
       this.debugLog(`Curtain: ${accessory.displayName} Battery Service Not Added`);
     }
 
-    // Setup EVE history features
-    this.setupHistoryService(device);
-
     // Update Homekit
     this.updateHomeKitCharacteristics();
 
@@ -215,6 +212,9 @@ export class Curtain {
         }
         this.curtainUpdateInProgress = false;
       });
+
+    // Setup EVE history features
+    this.setupHistoryService(device);
   }
 
   /*
@@ -295,7 +295,7 @@ export class Curtain {
     sensor.getCharacteristic(this.platform.Characteristic.ContactSensorState)
       .on('change', (event: CharacteristicChange) => {
 	if (event.newValue !== event.oldValue) {
-	  this.infoLog('ContactSensor state on change:', event);
+	  this.infoLog(`ContactSensor state on change: ${event}`);
 	  const sensor = this.accessory.getService(this.platform.Service.ContactSensor);
           const entry = {
             time: Math.round(new Date().valueOf()/1000),
@@ -928,7 +928,7 @@ export class Curtain {
 	    this.platform.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED :
 	    this.platform.Characteristic.ContactSensorState.CONTACT_DETECTED;
       sensor.updateCharacteristic(this.platform.Characteristic.ContactSensorState, state);
-      this.debugLog('ContactSensor state updated:', state);
+      this.debugLog(`ContactSensor state updated: ${state}`);
     }
   }
 
