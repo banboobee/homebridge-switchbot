@@ -295,7 +295,7 @@ export class Curtain {
     sensor.getCharacteristic(this.platform.Characteristic.ContactSensorState)
       .on('change', (event: CharacteristicChange) => {
 	if (event.newValue !== event.oldValue) {
-	  this.infoLog(`ContactSensor state on change: ${event}`);
+	    this.infoLog(`ContactSensor state on change: ${JSON.stringify(event)}`);
 	  const sensor = this.accessory.getService(this.platform.Service.ContactSensor);
           const entry = {
             time: Math.round(new Date().valueOf()/1000),
