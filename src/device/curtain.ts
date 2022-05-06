@@ -7,7 +7,20 @@ import { DeviceURL, device, devicesConfig, serviceData, switchbot, deviceStatusR
 import { Context } from 'vm';
 import { MqttClient } from 'mqtt';
 import { connectAsync } from 'async-mqtt';
-import { hostname } from "os";
+import { hostname } from 'os';
+
+// Characteristic Values
+interface currentState {
+  CurrentPosition: CharacteristicValue;
+  PositionState: CharacteristicValue;
+  TargetPosition: CharacteristicValue;
+  CurrentAmbientLightLevel?: CharacteristicValue;
+  BatteryLevel?: CharacteristicValue;
+  StatusLowBattery?: CharacteristicValue;
+  lastActivation?: number;
+  timesOpened: number;
+  lastReset?: CharacteristicValue;
+};
 
 export class Curtain {
   // Services
@@ -15,16 +28,8 @@ export class Curtain {
   lightSensorService?: Service;
   batteryService?: Service;
 
-  // Characteristic Values
-  CurrentPosition!: CharacteristicValue;
-  PositionState!: CharacteristicValue;
-  TargetPosition!: CharacteristicValue;
-  CurrentAmbientLightLevel?: CharacteristicValue;
-  BatteryLevel?: CharacteristicValue;
-  StatusLowBattery?: CharacteristicValue;
-  lastActivation?: number;
-  timesOpened: number = 0;
-  lastReset?: CharacteristicValue;
+  // current status
+  state!: currentState;
 
   // OpenAPI Others
   deviceStatus!: deviceStatusResponse;
@@ -78,9 +83,9 @@ export class Curtain {
     this.scan(device);
     this.config(device);
     this.setupMqtt(device);
-    this.CurrentPosition = 0;
-    this.TargetPosition = 0;
-    this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+    this.state.CurrentPosition = 0;
+    this.state.TargetPosition = 0;
+    this.state.PositionState = this.platform.Characteristic.PositionState.STOPPED;
 
     // this is subject we use to track when we need to POST changes to the SwitchBot API
     this.doCurtainUpdate = new Subject();
@@ -117,7 +122,7 @@ export class Curtain {
     // see https://developers.homebridge.io/#/service/WindowCovering
 
     // create handlers for required characteristics
-    this.windowCoveringService.setCharacteristic(this.platform.Characteristic.PositionState, this.PositionState);
+    this.windowCoveringService.setCharacteristic(this.platform.Characteristic.PositionState, this.state.PositionState);
 
     this.windowCoveringService
       .getCharacteristic(this.platform.Characteristic.CurrentPosition)
@@ -128,7 +133,7 @@ export class Curtain {
         validValueRanges: [0, 100],
       })
       .onGet(() => {
-        return this.CurrentPosition;
+        return this.state.CurrentPosition;
       });
 
     this.windowCoveringService
@@ -184,10 +189,10 @@ export class Curtain {
     interval(this.updateRate * 1000)
       .pipe(skipWhile(() => this.curtainUpdateInProgress))
       .subscribe(async () => {
-        if (this.PositionState === this.platform.Characteristic.PositionState.STOPPED) {
+        if (this.state.PositionState === this.platform.Characteristic.PositionState.STOPPED) {
           return;
         }
-        this.debugLog(`Curtain: ${accessory.displayName} Refresh Status When Moving, PositionState: ${this.PositionState}`);
+        this.debugLog(`Curtain: ${accessory.displayName} Refresh Status When Moving, PositionState: ${this.state.PositionState}`);
         await this.refreshStatus();
       });
 
@@ -269,12 +274,12 @@ export class Curtain {
       .onGet(() => 0);
     sensor.addOptionalCharacteristic(this.platform.eve.Characteristics.TimesOpened);
     sensor.getCharacteristic(this.platform.eve.Characteristics.TimesOpened)
-      .onGet(() => this.timesOpened);
+      .onGet(() => this.state.timesOpened);
     sensor.addOptionalCharacteristic(this.platform.eve.Characteristics.LastActivation);
     sensor.getCharacteristic(this.platform.eve.Characteristics.LastActivation)
       .onGet(() => {
-	const lastActivation = this.lastActivation ?
-	      this.lastActivation - this.historyService.getInitialTime() : 0;
+	const lastActivation = this.state.lastActivation ?
+	      this.state.lastActivation - this.historyService.getInitialTime() : 0;
 	this.debugLog(`Get LastActivation ${this.accessory.displayName}: ${lastActivation}`);
 	return lastActivation;
       });
@@ -282,14 +287,14 @@ export class Curtain {
     sensor.getCharacteristic(this.platform.eve.Characteristics.ResetTotal)
       .onSet((reset: CharacteristicValue) => {
 	const sensor = this.accessory.getService(this.platform.Service.ContactSensor);
-        this.timesOpened = 0;
-        this.lastReset = reset;
+        this.state.timesOpened = 0;
+        this.state.lastReset = reset;
         sensor?.updateCharacteristic(this.platform.eve.Characteristics.TimesOpened, 0);
         this.infoLog(`${this.accessory.displayName}: Reset TimesOpened to 0`);
         this.infoLog(`${this.accessory.displayName}: Set lastReset to ${reset}`);
       })
       .onGet(() => {
-	return this.lastReset ||
+	return this.state.lastReset ||
 	  this.historyService.getInitialTime() - Math.round(Date.parse('01 Jan 2001 00:00:00 GMT')/1000);
       });
     sensor.getCharacteristic(this.platform.Characteristic.ContactSensorState)
@@ -301,11 +306,11 @@ export class Curtain {
             time: Math.round(new Date().valueOf()/1000),
             status: event.newValue
           };
-          this.lastActivation = entry.time;
-          sensor?.updateCharacteristic(this.platform.eve.Characteristics.LastActivation, this.lastActivation - this.historyService.getInitialTime());
+          this.state.lastActivation = entry.time;
+          sensor?.updateCharacteristic(this.platform.eve.Characteristics.LastActivation, this.state.lastActivation - this.historyService.getInitialTime());
           if (entry.status) {
-            this.timesOpened++;
-            sensor?.updateCharacteristic(this.platform.eve.Characteristics.TimesOpened, this.timesOpened);
+            this.state.timesOpened++;
+            sensor?.updateCharacteristic(this.platform.eve.Characteristics.TimesOpened, this.state?.timesOpened);
           }
           this.historyService.addEntry(entry);
 	}
@@ -315,7 +320,7 @@ export class Curtain {
   }
 
   async updateHistory() : Promise<void>{
-    const state = this.CurrentPosition > 0 ?
+    const state = this.state.CurrentPosition > 0 ?
 	  this.platform.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED :
 	  this.platform.Characteristic.ContactSensorState.CONTACT_DETECTED;
     this.historyService.addEntry ({
@@ -341,40 +346,40 @@ export class Curtain {
   async BLEparseStatus(): Promise<void> {
     this.debugLog(`Curtain: ${this.accessory.displayName} BLE parseStatus`);
     // CurrentPosition
-    this.CurrentPosition = 100 - Number(this.position);
+    this.state.CurrentPosition = 100 - Number(this.position);
     await this.setMinMax();
-    this.debugLog(`Curtain: ${this.accessory.displayName} CurrentPosition ${this.CurrentPosition}`);
+    this.debugLog(`Curtain: ${this.accessory.displayName} CurrentPosition ${this.state.CurrentPosition}`);
     if (this.setNewTarget) {
       this.infoLog(`Curtain: ${this.accessory.displayName} Checking Status ...`);
     }
 
     if (this.setNewTarget) {
       await this.setMinMax();
-      if (this.TargetPosition > this.CurrentPosition) {
-        this.debugLog(`Curtain: ${this.accessory.displayName} Closing, CurrentPosition: ${this.CurrentPosition}`);
-        this.PositionState = this.platform.Characteristic.PositionState.INCREASING;
-        this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.PositionState);
-        this.warnLog(`Curtain: ${this.CurrentPosition} INCREASING PositionState: ${this.PositionState}`);
-      } else if (this.TargetPosition < this.CurrentPosition) {
-        this.debugLog(`Curtain: ${this.accessory.displayName} Opening, CurrentPosition: ${this.CurrentPosition}`);
-        this.PositionState = this.platform.Characteristic.PositionState.DECREASING;
-        this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.PositionState);
-        this.warnLog(`Curtain: ${this.CurrentPosition} DECREASING PositionState: ${this.PositionState}`);
+      if (this.state.TargetPosition > this.state.CurrentPosition) {
+        this.debugLog(`Curtain: ${this.accessory.displayName} Closing, CurrentPosition: ${this.state.CurrentPosition}`);
+        this.state.PositionState = this.platform.Characteristic.PositionState.INCREASING;
+        this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
+        this.warnLog(`Curtain: ${this.state.CurrentPosition} INCREASING PositionState: ${this.state.PositionState}`);
+      } else if (this.state.TargetPosition < this.state.CurrentPosition) {
+        this.debugLog(`Curtain: ${this.accessory.displayName} Opening, CurrentPosition: ${this.state.CurrentPosition}`);
+        this.state.PositionState = this.platform.Characteristic.PositionState.DECREASING;
+        this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
+        this.warnLog(`Curtain: ${this.state.CurrentPosition} DECREASING PositionState: ${this.state.PositionState}`);
       } else {
-        this.debugLog(`Curtain: ${this.CurrentPosition} Standby, CurrentPosition: ${this.CurrentPosition}`);
-        this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
-        this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.PositionState);
-        this.warnLog(`Curtain: ${this.CurrentPosition} STOPPED PositionState: ${this.PositionState}`);
+        this.debugLog(`Curtain: ${this.state.CurrentPosition} Standby, CurrentPosition: ${this.state.CurrentPosition}`);
+        this.state.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+        this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
+        this.warnLog(`Curtain: ${this.state.CurrentPosition} STOPPED PositionState: ${this.state.PositionState}`);
       }
     } else {
-      this.debugLog(`Curtain: ${this.accessory.displayName} Standby, CurrentPosition: ${this.CurrentPosition}`);
-      this.TargetPosition = this.CurrentPosition;
-      this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+      this.debugLog(`Curtain: ${this.accessory.displayName} Standby, CurrentPosition: ${this.state.CurrentPosition}`);
+      this.state.TargetPosition = this.state.CurrentPosition;
+      this.state.PositionState = this.platform.Characteristic.PositionState.STOPPED;
       this.debugLog(`Curtain: ${this.accessory.displayName} Stopped`);
     }
     this.debugLog(
-      `Curtain: ${this.accessory.displayName} CurrentPosition: ${this.CurrentPosition},` +
-        ` TargetPosition: ${this.TargetPosition}, PositionState: ${this.PositionState},`,
+      `Curtain: ${this.accessory.displayName} CurrentPosition: ${this.state.CurrentPosition},` +
+        ` TargetPosition: ${this.state.TargetPosition}, PositionState: ${this.state.PositionState},`,
     );
 
     if (!this.device.curtain?.hide_lightsensor) {
@@ -385,61 +390,61 @@ export class Curtain {
       // Brightness
       switch (this.lightLevel) {
         case 1:
-          this.CurrentAmbientLightLevel = this.set_minLux;
+          this.state.CurrentAmbientLightLevel = this.set_minLux;
           this.debugLog(`Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel}`);
           break;
         case 2:
-          this.CurrentAmbientLightLevel = (this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels;
+          this.state.CurrentAmbientLightLevel = (this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels;
           this.debugLog(
             `Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel},` +
               ` Calculation: ${(this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels}`,
           );
           break;
         case 3:
-          this.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 2;
+          this.state.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 2;
           this.debugLog(`Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel}`);
           break;
         case 4:
-          this.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 3;
+          this.state.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 3;
           this.debugLog(`Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel}`);
           break;
         case 5:
-          this.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 4;
+          this.state.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 4;
           this.debugLog(`Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel}`);
           break;
         case 6:
-          this.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 5;
+          this.state.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 5;
           this.debugLog(`Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel}`);
           break;
         case 7:
-          this.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 6;
+          this.state.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 6;
           this.debugLog(`Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel}`);
           break;
         case 8:
-          this.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 7;
+          this.state.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 7;
           this.debugLog(`Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel}`);
           break;
         case 9:
-          this.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 8;
+          this.state.CurrentAmbientLightLevel = ((this.set_maxLux - this.set_minLux) / this.spaceBetweenLevels) * 8;
           this.debugLog(`Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel}`);
           break;
         case 10:
         default:
-          this.CurrentAmbientLightLevel = this.set_maxLux;
+          this.state.CurrentAmbientLightLevel = this.set_maxLux;
           this.debugLog();
       }
       this.debugLog(
-        `Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel},` + ` CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`,
+        `Curtain: ${this.accessory.displayName} LightLevel: ${this.lightLevel},` + ` CurrentAmbientLightLevel: ${this.state.CurrentAmbientLightLevel}`,
       );
     }
     // Battery
-    this.BatteryLevel = Number(this.battery);
-    if (this.BatteryLevel < 10) {
-      this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW;
+    this.state.BatteryLevel = Number(this.battery);
+    if (this.state.BatteryLevel < 10) {
+      this.state.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW;
     } else {
-      this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+      this.state.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
     }
-    this.debugLog(`Curtain: ${this.accessory.displayName} BatteryLevel: ${this.BatteryLevel}, StatusLowBattery: ${this.StatusLowBattery}`);
+    this.debugLog(`Curtain: ${this.accessory.displayName} BatteryLevel: ${this.state.BatteryLevel}, StatusLowBattery: ${this.state.StatusLowBattery}`);
   }
 
   async openAPIparseStatus(): Promise<void> {
@@ -449,40 +454,40 @@ export class Curtain {
     if (this.platform.config.credentials?.openToken) {
       this.debugLog(`Curtain: ${this.accessory.displayName} OpenAPI parseStatus`);
       // CurrentPosition
-      this.CurrentPosition = 100 - Number(this.slidePosition);
+      this.state.CurrentPosition = 100 - Number(this.slidePosition);
       await this.setMinMax();
-      this.debugLog(`Curtain ${this.accessory.displayName} CurrentPosition: ${this.CurrentPosition}`);
+      this.debugLog(`Curtain ${this.accessory.displayName} CurrentPosition: ${this.state.CurrentPosition}`);
       if (this.setNewTarget) {
         this.infoLog(`Curtain: ${this.accessory.displayName} Checking Status ...`);
       }
 
       if (this.setNewTarget && this.moving) {
         await this.setMinMax();
-        if (this.TargetPosition > this.CurrentPosition) {
-          this.debugLog(`Curtain: ${this.accessory.displayName} Closing, CurrentPosition: ${this.CurrentPosition} `);
-          this.PositionState = this.platform.Characteristic.PositionState.INCREASING;
-          this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.PositionState);
-          this.debugLog(`Curtain: ${this.CurrentPosition} INCREASING PositionState: ${this.PositionState}`);
-        } else if (this.TargetPosition < this.CurrentPosition) {
-          this.debugLog(`Curtain: ${this.accessory.displayName} Opening, CurrentPosition: ${this.CurrentPosition} `);
-          this.PositionState = this.platform.Characteristic.PositionState.DECREASING;
-          this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.PositionState);
-          this.debugLog(`Curtain: ${this.CurrentPosition} DECREASING PositionState: ${this.PositionState}`);
+        if (this.state.TargetPosition > this.state.CurrentPosition) {
+          this.debugLog(`Curtain: ${this.accessory.displayName} Closing, CurrentPosition: ${this.state.CurrentPosition} `);
+          this.state.PositionState = this.platform.Characteristic.PositionState.INCREASING;
+          this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
+          this.debugLog(`Curtain: ${this.state.CurrentPosition} INCREASING PositionState: ${this.state.PositionState}`);
+        } else if (this.state.TargetPosition < this.state.CurrentPosition) {
+          this.debugLog(`Curtain: ${this.accessory.displayName} Opening, CurrentPosition: ${this.state.CurrentPosition} `);
+          this.state.PositionState = this.platform.Characteristic.PositionState.DECREASING;
+          this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
+          this.debugLog(`Curtain: ${this.state.CurrentPosition} DECREASING PositionState: ${this.state.PositionState}`);
         } else {
-          this.debugLog(`Curtain: ${this.CurrentPosition} Standby, CurrentPosition: ${this.CurrentPosition}`);
-          this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
-          this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.PositionState);
-          this.debugLog(`Curtain: ${this.CurrentPosition} STOPPED PositionState: ${this.PositionState}`);
+          this.debugLog(`Curtain: ${this.state.CurrentPosition} Standby, CurrentPosition: ${this.state.CurrentPosition}`);
+          this.state.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+          this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
+          this.debugLog(`Curtain: ${this.state.CurrentPosition} STOPPED PositionState: ${this.state.PositionState}`);
         }
       } else {
-        this.debugLog(`Curtain: ${this.accessory.displayName} Standby, CurrentPosition: ${this.CurrentPosition}`);
-        this.TargetPosition = this.CurrentPosition;
-        this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+        this.debugLog(`Curtain: ${this.accessory.displayName} Standby, CurrentPosition: ${this.state.CurrentPosition}`);
+        this.state.TargetPosition = this.state.CurrentPosition;
+        this.state.PositionState = this.platform.Characteristic.PositionState.STOPPED;
         this.debugLog(`Curtain: ${this.accessory.displayName} Stopped`);
       }
       this.debugLog(
-        `Curtain: ${this.accessory.displayName} CurrentPosition: ${this.CurrentPosition},` +
-          ` TargetPosition: ${this.TargetPosition}, PositionState: ${this.PositionState},`,
+        `Curtain: ${this.accessory.displayName} CurrentPosition: ${this.state.CurrentPosition},` +
+          ` TargetPosition: ${this.state.TargetPosition}, PositionState: ${this.state.PositionState},`,
       );
 
       if (!this.device.curtain?.hide_lightsensor) {
@@ -491,13 +496,13 @@ export class Curtain {
         // Brightness
         switch (this.brightness) {
           case 'dim':
-            this.CurrentAmbientLightLevel = this.set_minLux;
+            this.state.CurrentAmbientLightLevel = this.set_minLux;
             break;
           case 'bright':
           default:
-            this.CurrentAmbientLightLevel = this.set_maxLux;
+            this.state.CurrentAmbientLightLevel = this.set_maxLux;
         }
-        this.debugLog(`Curtain: ${this.accessory.displayName} CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`);
+        this.debugLog(`Curtain: ${this.accessory.displayName} CurrentAmbientLightLevel: ${this.state.CurrentAmbientLightLevel}`);
       }
     }
   }
@@ -652,7 +657,7 @@ export class Curtain {
   }
 
   async BLEpushChanges(): Promise<void> {
-    if (this.TargetPosition !== this.CurrentPosition) {
+    if (this.state.TargetPosition !== this.state.CurrentPosition) {
       this.debugLog(`Curtain: ${this.accessory.displayName} BLE pushChanges`);
       const switchbot = await this.platform.connectBLE();
       // Convert to BLE Address
@@ -661,7 +666,7 @@ export class Curtain {
         .join(':')
         .toLowerCase();
       this.debugLog(`Curtain: ${this.accessory.displayName} BLE Address: ${this.device.bleMac}`);
-      if (this.TargetPosition > 50) {
+      if (this.state.TargetPosition > 50) {
         if (this.device.curtain?.setOpenMode === '1') {
           this.setPositionMode = 1;
           this.Mode = 'Silent Mode';
@@ -687,8 +692,8 @@ export class Curtain {
         switchbot
           .discover({ model: 'c', quick: true, id: this.device.bleMac })
           .then((device_list) => {
-            this.infoLog(`${this.accessory.displayName} Target Position: ${this.TargetPosition}`);
-            return device_list[0].runToPos(100 - Number(this.TargetPosition), adjustedMode);
+            this.infoLog(`${this.accessory.displayName} Target Position: ${this.state.TargetPosition}`);
+            return device_list[0].runToPos(100 - Number(this.state.TargetPosition), adjustedMode);
           })
           .then(() => {
             this.debugLog(`Curtain: ${this.accessory.displayName} Done.`);
@@ -716,7 +721,7 @@ export class Curtain {
     } else {
       this.debugLog(
         `Curtain: ${this.accessory.displayName} No BLE Changes, CurrentPosition & TargetPosition Are the Same.` +
-          `  CurrentPosition: ${this.CurrentPosition}, TargetPosition  ${this.TargetPosition}`,
+          `  CurrentPosition: ${this.state.CurrentPosition}, TargetPosition  ${this.state.TargetPosition}`,
       );
     }
   }
@@ -725,10 +730,10 @@ export class Curtain {
     if (this.platform.config.credentials?.openToken) {
       try {
         this.debugLog(`Curtain: ${this.accessory.displayName} OpenAPI pushChanges`);
-        if (this.TargetPosition !== this.CurrentPosition) {
-          this.debugLog(`Pushing ${this.TargetPosition}`);
-          const adjustedTargetPosition = 100 - Number(this.TargetPosition);
-          if (this.TargetPosition > 50) {
+        if (this.state.TargetPosition !== this.state.CurrentPosition) {
+          this.debugLog(`Pushing ${this.state.TargetPosition}`);
+          const adjustedTargetPosition = 100 - Number(this.state.TargetPosition);
+          if (this.state.TargetPosition > 50) {
             this.setPositionMode = this.device.curtain?.setOpenMode;
           } else {
             this.setPositionMode = this.device.curtain?.setCloseMode;
@@ -760,7 +765,7 @@ export class Curtain {
         } else {
           this.debugLog(
             `Curtain: ${this.accessory.displayName} No OpenAPI Changes, CurrentPosition & TargetPosition Are the Same.` +
-              `  CurrentPosition: ${this.CurrentPosition}, TargetPosition  ${this.TargetPosition}`,
+              `  CurrentPosition: ${this.state.CurrentPosition}, TargetPosition  ${this.state.TargetPosition}`,
           );
         }
       } catch (e: any) {
@@ -777,50 +782,50 @@ export class Curtain {
 
   async updateHomeKitCharacteristics(): Promise<void> {
     await this.setMinMax();
-    if (this.CurrentPosition === undefined || Number.isNaN(this.CurrentPosition)) {
-      this.debugLog(`Curtain: ${this.accessory.displayName} CurrentPosition: ${this.CurrentPosition}`);
+    if (this.state.CurrentPosition === undefined || Number.isNaN(this.state.CurrentPosition)) {
+      this.debugLog(`Curtain: ${this.accessory.displayName} CurrentPosition: ${this.state.CurrentPosition}`);
     } else {
-      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.CurrentPosition, Number(this.CurrentPosition));
-      this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic CurrentPosition: ${this.CurrentPosition}`);
-      this.mqttPublish('CurrentPosition', this.CurrentPosition);
+      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.CurrentPosition, Number(this.state.CurrentPosition));
+      this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic CurrentPosition: ${this.state.CurrentPosition}`);
+      this.mqttPublish('CurrentPosition', this.state.CurrentPosition);
     }
-    if (this.PositionState === undefined) {
-      this.debugLog(`Curtain: ${this.accessory.displayName} PositionState: ${this.PositionState}`);
+    if (this.state.PositionState === undefined) {
+      this.debugLog(`Curtain: ${this.accessory.displayName} PositionState: ${this.state.PositionState}`);
     } else {
-      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.PositionState, Number(this.PositionState));
-      this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic PositionState: ${this.PositionState}`);
-      this.mqttPublish('PositionState', this.PositionState);
+      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.PositionState, Number(this.state.PositionState));
+      this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic PositionState: ${this.state.PositionState}`);
+      this.mqttPublish('PositionState', this.state.PositionState);
     }
-    if (this.TargetPosition === undefined || Number.isNaN(this.TargetPosition)) {
-      this.debugLog(`Curtain: ${this.accessory.displayName} TargetPosition: ${this.TargetPosition}`);
+    if (this.state.TargetPosition === undefined || Number.isNaN(this.state.TargetPosition)) {
+      this.debugLog(`Curtain: ${this.accessory.displayName} TargetPosition: ${this.state.TargetPosition}`);
     } else {
-      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.TargetPosition, Number(this.TargetPosition));
-      this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic TargetPosition: ${this.TargetPosition}`);
-      this.mqttPublish('TargetPosition', this.TargetPosition);
+      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.TargetPosition, Number(this.state.TargetPosition));
+      this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic TargetPosition: ${this.state.TargetPosition}`);
+      this.mqttPublish('TargetPosition', this.state.TargetPosition);
     }
     if (!this.device.curtain?.hide_lightsensor) {
-      if (this.CurrentAmbientLightLevel === undefined || Number.isNaN(this.CurrentAmbientLightLevel)) {
-        this.debugLog(`Curtain: ${this.accessory.displayName} CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`);
+      if (this.state.CurrentAmbientLightLevel === undefined || Number.isNaN(this.state.CurrentAmbientLightLevel)) {
+        this.debugLog(`Curtain: ${this.accessory.displayName} CurrentAmbientLightLevel: ${this.state.CurrentAmbientLightLevel}`);
       } else {
-        this.lightSensorService?.updateCharacteristic(this.platform.Characteristic.CurrentAmbientLightLevel, this.CurrentAmbientLightLevel);
-        this.debugLog(`Curtain: ${this.accessory.displayName}` + ` updateCharacteristic CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`);
-	this.mqttPublish('CurrentAmbientLightLevel', this.CurrentAmbientLightLevel);
+        this.lightSensorService?.updateCharacteristic(this.platform.Characteristic.CurrentAmbientLightLevel, this.state.CurrentAmbientLightLevel);
+        this.debugLog(`Curtain: ${this.accessory.displayName}` + ` updateCharacteristic CurrentAmbientLightLevel: ${this.state.CurrentAmbientLightLevel}`);
+	this.mqttPublish('CurrentAmbientLightLevel', this.state.CurrentAmbientLightLevel);
       }
     }
     if (this.device.ble) {
-      if (this.BatteryLevel === undefined) {
-        this.debugLog(`Curtain: ${this.accessory.displayName} BatteryLevel: ${this.BatteryLevel}`);
+      if (this.state.BatteryLevel === undefined) {
+        this.debugLog(`Curtain: ${this.accessory.displayName} BatteryLevel: ${this.state.BatteryLevel}`);
       } else {
-        this.batteryService?.updateCharacteristic(this.platform.Characteristic.BatteryLevel, this.BatteryLevel);
-        this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic BatteryLevel: ${this.BatteryLevel}`);
-	this.mqttPublish('BatteryLevel', this.BatteryLevel);
+        this.batteryService?.updateCharacteristic(this.platform.Characteristic.BatteryLevel, this.state.BatteryLevel);
+        this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic BatteryLevel: ${this.state.BatteryLevel}`);
+	this.mqttPublish('BatteryLevel', this.state.BatteryLevel);
       }
-      if (this.StatusLowBattery === undefined) {
-        this.debugLog(`Curtain: ${this.accessory.displayName} StatusLowBattery: ${this.StatusLowBattery}`);
+      if (this.state.StatusLowBattery === undefined) {
+        this.debugLog(`Curtain: ${this.accessory.displayName} StatusLowBattery: ${this.state.StatusLowBattery}`);
       } else {
-        this.batteryService?.updateCharacteristic(this.platform.Characteristic.StatusLowBattery, this.StatusLowBattery);
-        this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic StatusLowBattery: ${this.StatusLowBattery}`);
-	this.mqttPublish('StatusLowBattery', this.StatusLowBattery);
+        this.batteryService?.updateCharacteristic(this.platform.Characteristic.StatusLowBattery, this.state.StatusLowBattery);
+        this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic StatusLowBattery: ${this.state.StatusLowBattery}`);
+	this.mqttPublish('StatusLowBattery', this.state.StatusLowBattery);
       }
     }
   }
@@ -876,25 +881,25 @@ export class Curtain {
   async TargetPositionSet(value: CharacteristicValue): Promise<void> {
     this.debugLog(`Curtain: ${this.accessory.displayName} TargetPosition: ${value}`);
 
-    this.TargetPosition = value;
-    this.mqttPublish('TargetPosition', this.TargetPosition);
+    this.state.TargetPosition = value;
+    this.mqttPublish('TargetPosition', this.state.TargetPosition);
 
     await this.setMinMax();
-    if (value > this.CurrentPosition) {
-      this.PositionState = this.platform.Characteristic.PositionState.INCREASING;
+    if (value > this.state.CurrentPosition) {
+      this.state.PositionState = this.platform.Characteristic.PositionState.INCREASING;
       this.setNewTarget = true;
-      this.debugLog(`Curtain: ${this.accessory.displayName} value: ${value}, CurrentPosition: ${this.CurrentPosition}`);
-    } else if (value < this.CurrentPosition) {
-      this.PositionState = this.platform.Characteristic.PositionState.DECREASING;
+      this.debugLog(`Curtain: ${this.accessory.displayName} value: ${value}, CurrentPosition: ${this.state.CurrentPosition}`);
+    } else if (value < this.state.CurrentPosition) {
+      this.state.PositionState = this.platform.Characteristic.PositionState.DECREASING;
       this.setNewTarget = true;
-      this.debugLog(`Curtain: ${this.accessory.displayName} value: ${value}, CurrentPosition: ${this.CurrentPosition}`);
+      this.debugLog(`Curtain: ${this.accessory.displayName} value: ${value}, CurrentPosition: ${this.state.CurrentPosition}`);
     } else {
-      this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+      this.state.PositionState = this.platform.Characteristic.PositionState.STOPPED;
       this.setNewTarget = false;
-      this.debugLog(`Curtain: ${this.accessory.displayName} value: ${value}, CurrentPosition: ${this.CurrentPosition}`);
+      this.debugLog(`Curtain: ${this.accessory.displayName} value: ${value}, CurrentPosition: ${this.state.CurrentPosition}`);
     }
-    this.windowCoveringService.setCharacteristic(this.platform.Characteristic.PositionState, this.PositionState);
-    this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.PositionState);
+    this.windowCoveringService.setCharacteristic(this.platform.Characteristic.PositionState, this.state.PositionState);
+    this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
 
     /**
      * If Curtain movement time is short, the moving flag from backend is always false.
@@ -914,17 +919,17 @@ export class Curtain {
   async setMinMax(): Promise<void> {
     const sensor = this.accessory.getService(this.platform.Service.ContactSensor);
     if (this.device.curtain?.set_min) {
-      if (this.CurrentPosition <= this.device.curtain?.set_min) {
-        this.CurrentPosition = 0;
+      if (this.state.CurrentPosition <= this.device.curtain?.set_min) {
+        this.state.CurrentPosition = 0;
       }
     }
     if (this.device.curtain?.set_max) {
-      if (this.CurrentPosition >= this.device.curtain?.set_max) {
-        this.CurrentPosition = 100;
+      if (this.state.CurrentPosition >= this.device.curtain?.set_max) {
+        this.state.CurrentPosition = 100;
       }
     }
     if (sensor) {
-      const state = this.CurrentPosition > 0 ?
+      const state = this.state.CurrentPosition > 0 ?
 	    this.platform.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED :
 	    this.platform.Characteristic.ContactSensorState.CONTACT_DETECTED;
       sensor.updateCharacteristic(this.platform.Characteristic.ContactSensorState, state);
