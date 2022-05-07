@@ -8,6 +8,8 @@ import { Context } from 'vm';
 import { MqttClient } from 'mqtt';
 import { connectAsync } from 'async-mqtt';
 import { hostname } from 'os';
+import NodePersist from 'node-persist';
+import * as path from 'path';
 
 // Characteristic Values
 interface currentState {
@@ -83,9 +85,15 @@ export class Curtain {
     this.scan(device);
     this.config(device);
     this.setupMqtt(device);
-    this.state.CurrentPosition = 0;
-    this.state.TargetPosition = 0;
-    this.state.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+    this.state = {
+      CurrentPosition: 0,
+      TargetPosition: 0,
+      PositionState: this.platform.Characteristic.PositionState.STOPPED,
+      lastActivation: 0,
+      timesOpened: 0,
+      lastReset: 0
+    }
+    this.setupPersist(device, this.platform.api.user.storagePath());
 
     // this is subject we use to track when we need to POST changes to the SwitchBot API
     this.doCurtainUpdate = new Subject();
@@ -330,6 +338,27 @@ export class Curtain {
     setTimeout(() => {
       this.updateHistory();
     }, 10 * 60 * 1000);
+  }
+
+  async setupPersist(device: device & devicesConfig, user: string): Promise<void> {
+    const persist = NodePersist.create();
+    const mac = this.device.deviceId?.toLowerCase().match(/[\s\S]{1,2}/g)?.join(':') || '';
+    await persist.init(
+      {dir: path.join(user, 'plugin-persist', 'homebridge-switchbot'),
+       forgiveParseErrors: true
+      });
+    let state: currentState = (await persist.getItemSync(mac)) || this.state;
+    this.platform.log.info(`${this.accessory.displayName} Persist: ${JSON.stringify(state)}`);
+    this.state = new Proxy(state, {
+      set: (target:any, key:PropertyKey, value:any, receiver:any):boolean => {
+	try {
+	  persist.setItemSync(mac, target)
+	} catch(e) {
+	  this.platform.log.error(`${this.accessory.displayName} is unable to set state persist`, e);
+	}
+	return Reflect.set(target, key, value, receiver);
+      }
+    })
   }
 
   /**
