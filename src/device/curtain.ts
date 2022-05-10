@@ -93,7 +93,6 @@ export class Curtain {
       timesOpened: 0,
       lastReset: 0
     }
-    this.setupPersist(device, this.platform.api.user.storagePath());
 
     // this is subject we use to track when we need to POST changes to the SwitchBot API
     this.doCurtainUpdate = new Subject();
@@ -266,6 +265,11 @@ export class Curtain {
     if (device.history !== true) {
       return;
     }
+    // Retrieve persist state and re-retrieve current state to sync them.
+    await this.setupPersist(device, this.platform.api.user.storagePath());
+    await this.refreshRate(device);
+    await this.updateHomeKitCharacteristics();
+    
     const mac = this.device.deviceId!.match(/.{1,2}/g)!.join(':').toLowerCase();
     const sensor: Service =
       this.accessory.getService(this.platform.Service.ContactSensor) ||
@@ -305,6 +309,7 @@ export class Curtain {
 	return this.state.lastReset ||
 	  this.historyService.getInitialTime() - Math.round(Date.parse('01 Jan 2001 00:00:00 GMT')/1000);
       });
+    await this.setMinMax();
     sensor.getCharacteristic(this.platform.Characteristic.ContactSensorState)
       .on('change', (event: CharacteristicChange) => {
 	if (event.newValue !== event.oldValue) {
@@ -323,7 +328,6 @@ export class Curtain {
           this.historyService.addEntry(entry);
 	}
       });
-    this.setMinMax();
     this.updateHistory();
   }
 
@@ -348,13 +352,13 @@ export class Curtain {
        forgiveParseErrors: true
       });
     let state: currentState = (await persist.getItemSync(mac)) || this.state;
-    this.platform.log.info(`${this.accessory.displayName} Persist: ${JSON.stringify(state)}`);
+    this.infoLog(`${this.accessory.displayName} Persist: ${JSON.stringify(state)}`);
     this.state = new Proxy(state, {
       set: (target:any, key:PropertyKey, value:any, receiver:any):boolean => {
 	try {
 	  persist.setItemSync(mac, target)
 	} catch(e) {
-	  this.platform.log.error(`${this.accessory.displayName} is unable to set state persist`, e);
+	  this.errorLog(`${this.accessory.displayName} is unable to set state persist`, e);
 	}
 	return Reflect.set(target, key, value, receiver);
       }
@@ -962,7 +966,7 @@ export class Curtain {
 	    this.platform.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED :
 	    this.platform.Characteristic.ContactSensorState.CONTACT_DETECTED;
       sensor.updateCharacteristic(this.platform.Characteristic.ContactSensorState, state);
-      this.debugLog(`ContactSensor state updated: ${state}`);
+      this.debugLog(`${this.accessory.displayName} ContactSensor state updated: ${state}`);
     }
   }
 
