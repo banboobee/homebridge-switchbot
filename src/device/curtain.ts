@@ -246,14 +246,14 @@ export class Curtain {
   async setupMqtt(device: device & devicesConfig): Promise<void> {
     if (device.mqttURL) {
       try {
-	this.mqttClient = await connectAsync(device.mqttURL, device.mqttOptions || {});
-	this.debugLog(`Meter: ${this.accessory.displayName} MQTT connection has been established successfully.`)
-	this.mqttClient.on('error', (e: Error) => {
-	  this.errorLog(`Meter: ${this.accessory.displayName} Failed to publish MQTT messages. ${e}`)
-	});
+        this.mqttClient = await connectAsync(device.mqttURL, device.mqttOptions || {});
+        this.debugLog(`Meter: ${this.accessory.displayName} MQTT connection has been established successfully.`);
+        this.mqttClient.on('error', (e: Error) => {
+          this.errorLog(`Meter: ${this.accessory.displayName} Failed to publish MQTT messages. ${e}`);
+        });
       } catch (e) {
-	this.mqttClient = null;
-	this.errorLog(`Meter: ${this.accessory.displayName} Failed to establish MQTT connection. ${e}`)
+        this.mqttClient = null;
+        this.errorLog(`Meter: ${this.accessory.displayName} Failed to establish MQTT connection. ${e}`);
       }
     }
   }
@@ -392,17 +392,17 @@ export class Curtain {
         this.debugLog(`Curtain: ${this.accessory.displayName} Closing, CurrentPosition: ${this.state.CurrentPosition}`);
         this.state.PositionState = this.platform.Characteristic.PositionState.INCREASING;
         this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
-        this.warnLog(`Curtain: ${this.state.CurrentPosition} INCREASING PositionState: ${this.state.PositionState}`);
+        this.debugLog(`Curtain: ${this.state.CurrentPosition} INCREASING PositionState: ${this.state.PositionState}`);
       } else if (this.state.TargetPosition < this.state.CurrentPosition) {
         this.debugLog(`Curtain: ${this.accessory.displayName} Opening, CurrentPosition: ${this.state.CurrentPosition}`);
         this.state.PositionState = this.platform.Characteristic.PositionState.DECREASING;
         this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
-        this.warnLog(`Curtain: ${this.state.CurrentPosition} DECREASING PositionState: ${this.state.PositionState}`);
+        this.debugLog(`Curtain: ${this.state.CurrentPosition} DECREASING PositionState: ${this.state.PositionState}`);
       } else {
         this.debugLog(`Curtain: ${this.state.CurrentPosition} Standby, CurrentPosition: ${this.state.CurrentPosition}`);
         this.state.PositionState = this.platform.Characteristic.PositionState.STOPPED;
         this.windowCoveringService.getCharacteristic(this.platform.Characteristic.PositionState).updateValue(this.state.PositionState);
-        this.warnLog(`Curtain: ${this.state.CurrentPosition} STOPPED PositionState: ${this.state.PositionState}`);
+        this.debugLog(`Curtain: ${this.state.CurrentPosition} STOPPED PositionState: ${this.state.PositionState}`);
       }
     } else {
       this.debugLog(`Curtain: ${this.accessory.displayName} Standby, CurrentPosition: ${this.state.CurrentPosition}`);
@@ -842,7 +842,7 @@ export class Curtain {
       } else {
         this.lightSensorService?.updateCharacteristic(this.platform.Characteristic.CurrentAmbientLightLevel, this.state.CurrentAmbientLightLevel);
         this.debugLog(`Curtain: ${this.accessory.displayName}` + ` updateCharacteristic CurrentAmbientLightLevel: ${this.state.CurrentAmbientLightLevel}`);
-	this.mqttPublish('CurrentAmbientLightLevel', this.state.CurrentAmbientLightLevel);
+        this.mqttPublish('CurrentAmbientLightLevel', this.state.CurrentAmbientLightLevel);
       }
     }
     if (this.device.ble) {
@@ -851,14 +851,14 @@ export class Curtain {
       } else {
         this.batteryService?.updateCharacteristic(this.platform.Characteristic.BatteryLevel, this.state.BatteryLevel);
         this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic BatteryLevel: ${this.state.BatteryLevel}`);
-	this.mqttPublish('BatteryLevel', this.state.BatteryLevel);
+        this.mqttPublish('BatteryLevel', this.state.BatteryLevel);
       }
       if (this.state.StatusLowBattery === undefined) {
         this.debugLog(`Curtain: ${this.accessory.displayName} StatusLowBattery: ${this.state.StatusLowBattery}`);
       } else {
         this.batteryService?.updateCharacteristic(this.platform.Characteristic.StatusLowBattery, this.state.StatusLowBattery);
         this.debugLog(`Curtain: ${this.accessory.displayName} updateCharacteristic StatusLowBattery: ${this.state.StatusLowBattery}`);
-	this.mqttPublish('StatusLowBattery', this.state.StatusLowBattery);
+        this.mqttPublish('StatusLowBattery', this.state.StatusLowBattery);
       }
     }
   }
