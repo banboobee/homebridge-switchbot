@@ -271,105 +271,121 @@ export class Curtain {
     await this.updateHomeKitCharacteristics();
     
     const mac = this.device.deviceId!.match(/.{1,2}/g)!.join(':').toLowerCase();
-    const contact: Service =
-      this.accessory.getService(this.platform.Service.ContactSensor) ||
-      this.accessory.addService(this.platform.Service.ContactSensor, `${this.accessory.displayName} Contact`);
-    this.historyService = new this.platform.fakegatoAPI('custom', this.accessory,
-      {log: this.platform.log, storage: 'fs',
-       filename: `${hostname().split(".")[0]}_${mac}_persist.json`
-      });
-    contact.addOptionalCharacteristic(this.platform.eve.Characteristics.OpenDuration);
-    contact.getCharacteristic(this.platform.eve.Characteristics.OpenDuration)
-      .onGet(() => 0);
-    contact.addOptionalCharacteristic(this.platform.eve.Characteristics.ClosedDuration);
-    contact.getCharacteristic(this.platform.eve.Characteristics.ClosedDuration)
-      .onGet(() => 0);
-    contact.addOptionalCharacteristic(this.platform.eve.Characteristics.TimesOpened);
-    contact.getCharacteristic(this.platform.eve.Characteristics.TimesOpened)
-      .onGet(() => this.state.timesOpened);
-    contact.addOptionalCharacteristic(this.platform.eve.Characteristics.LastActivation);
-    contact.getCharacteristic(this.platform.eve.Characteristics.LastActivation)
-      .onGet(() => {
-	const lastActivation = this.state.lastActivation ?
-	      Math.max(0, this.state.lastActivation - this.historyService.getInitialTime()) : 0;
-	this.debugLog(`Get LastActivation ${this.accessory.displayName}: ${lastActivation}`);
-	return lastActivation;
-      });
-    contact.addOptionalCharacteristic(this.platform.eve.Characteristics.ResetTotal);
-    contact.getCharacteristic(this.platform.eve.Characteristics.ResetTotal)
-      .onSet((reset: CharacteristicValue) => {
-	const sensor = this.accessory.getService(this.platform.Service.ContactSensor);
-        this.state.timesOpened = 0;
-        this.state.lastReset = reset;
-        sensor?.updateCharacteristic(this.platform.eve.Characteristics.TimesOpened, 0);
-        this.infoLog(`${this.accessory.displayName}: Reset TimesOpened to 0`);
-        this.infoLog(`${this.accessory.displayName}: Set lastReset to ${reset}`);
-      })
-      .onGet(() => {
-	return this.state.lastReset ||
-	  this.historyService.getInitialTime() - Math.round(Date.parse('01 Jan 2001 00:00:00 GMT')/1000);
-      });
-    await this.setMinMax();
-    contact.getCharacteristic(this.platform.Characteristic.ContactSensorState)
-      .on('change', (event: CharacteristicChange) => {
-	if (event.newValue !== event.oldValue) {
-	  this.infoLog(`ContactSensor state on change: ${JSON.stringify(event)}`);
-	  this.state.lastActivation = Math.round(new Date().valueOf()/1000);
-	  const contact = this.accessory.getService(this.platform.Service.ContactSensor);
-          contact?.updateCharacteristic(this.platform.eve.Characteristics.LastActivation, this.state.lastActivation - this.historyService.getInitialTime());
-          if (event.newValue) {
-            this.state.timesOpened++;
-            contact?.updateCharacteristic(this.platform.eve.Characteristics.TimesOpened, this.state?.timesOpened);
-          }
-          this.historyService.addEntry({
-            time: this.state.lastActivation,
-            contact: event.newValue
-	  });
-	  const motion = this.accessory.getService(this.platform.Service.MotionSensor);
-          motion?.updateCharacteristic(this.platform.eve.Characteristics.LastActivation, this.state.lastActivation - this.historyService.getInitialTime());
-          this.historyService.addEntry({
-            time: this.state.lastActivation,
-            motion: event.newValue
-	  });
-	}
-      });
+    if (0) {
+      const contact: Service =
+	    this.accessory.getService(this.platform.Service.ContactSensor) ||
+	    this.accessory.addService(this.platform.Service.ContactSensor, `${this.accessory.displayName} Contact`);
+      this.historyService = new this.platform.fakegatoAPI('custom', this.accessory,
+							  {log: this.platform.log, storage: 'fs',
+							   filename: `${hostname().split(".")[0]}_${mac}_persist.json`
+							  });
 
-    const motion: Service =
-	  this.accessory.getService(this.platform.Service.MotionSensor) ||
-	  this.accessory.addService(this.platform.Service.MotionSensor, `${this.accessory.displayName} Motion`);
-    motion.addOptionalCharacteristic(this.platform.eve.Characteristics.LastActivation);
-    motion.getCharacteristic(this.platform.eve.Characteristics.LastActivation)
-      .onGet(() => {
-	const lastActivation = this.state.lastActivation ?
-	      Math.max(0, this.state.lastActivation - this.historyService.getInitialTime()) : 0;
-	this.debugLog(`Get LastActivation ${this.accessory.displayName}: ${lastActivation}`);
-	return lastActivation;
-      });
-      
-    this.updateHistory();
+      contact.addOptionalCharacteristic(this.platform.eve.Characteristics.OpenDuration);
+      contact.getCharacteristic(this.platform.eve.Characteristics.OpenDuration)
+	.onGet(() => 0);
+      contact.addOptionalCharacteristic(this.platform.eve.Characteristics.ClosedDuration);
+      contact.getCharacteristic(this.platform.eve.Characteristics.ClosedDuration)
+	.onGet(() => 0);
+      contact.addOptionalCharacteristic(this.platform.eve.Characteristics.TimesOpened);
+      contact.getCharacteristic(this.platform.eve.Characteristics.TimesOpened)
+	.onGet(() => this.state.timesOpened);
+      contact.addOptionalCharacteristic(this.platform.eve.Characteristics.LastActivation);
+      contact.getCharacteristic(this.platform.eve.Characteristics.LastActivation)
+	.onGet(() => {
+	  const lastActivation = this.state.lastActivation ?
+		Math.max(0, this.state.lastActivation - this.historyService.getInitialTime()) : 0;
+	  this.debugLog(`Get LastActivation ${this.accessory.displayName}: ${lastActivation}`);
+	  return lastActivation;
+	});
+      contact.addOptionalCharacteristic(this.platform.eve.Characteristics.ResetTotal);
+      contact.getCharacteristic(this.platform.eve.Characteristics.ResetTotal)
+	.onSet((reset: CharacteristicValue) => {
+	  const sensor = this.accessory.getService(this.platform.Service.ContactSensor);
+          this.state.timesOpened = 0;
+          this.state.lastReset = reset;
+          sensor?.updateCharacteristic(this.platform.eve.Characteristics.TimesOpened, 0);
+          this.infoLog(`${this.accessory.displayName}: Reset TimesOpened to 0`);
+          this.infoLog(`${this.accessory.displayName}: Set lastReset to ${reset}`);
+	})
+	.onGet(() => {
+	  return this.state.lastReset ||
+	    this.historyService.getInitialTime() - Math.round(Date.parse('01 Jan 2001 00:00:00 GMT')/1000);
+	});
+      await this.setMinMax();
+      contact.getCharacteristic(this.platform.Characteristic.ContactSensorState)
+	.on('change', (event: CharacteristicChange) => {
+	  if (event.newValue !== event.oldValue) {
+	    this.infoLog(`ContactSensor state on change: ${JSON.stringify(event)}`);
+	    const sensor = this.accessory.getService(this.platform.Service.ContactSensor);
+            const entry = {
+              time: Math.round(new Date().valueOf()/1000),
+              contact: event.newValue
+            };
+            this.state.lastActivation = entry.time;
+            sensor?.updateCharacteristic(this.platform.eve.Characteristics.LastActivation, Math.max(0, this.state.lastActivation - this.historyService.getInitialTime()));
+            if (entry.contact) {
+              this.state.timesOpened++;
+              sensor?.updateCharacteristic(this.platform.eve.Characteristics.TimesOpened, this.state?.timesOpened);
+            }
+            this.historyService.addEntry(entry);
+	  }
+	});
+    } else {
+      const motion: Service =
+	    this.accessory.getService(this.platform.Service.MotionSensor) ||
+	    this.accessory.addService(this.platform.Service.MotionSensor, `${this.accessory.displayName} Motion`);
+      this.historyService = new this.platform.fakegatoAPI('custom', this.accessory,
+							  {log: this.platform.log, storage: 'fs',
+							   filename: `${hostname().split(".")[0]}_${mac}_persist.json`
+							  });
+      motion.addOptionalCharacteristic(this.platform.eve.Characteristics.LastActivation);
+      motion.getCharacteristic(this.platform.eve.Characteristics.LastActivation)
+	.onGet(() => {
+	  const lastActivation = this.state.lastActivation ?
+		Math.max(0, this.state.lastActivation - this.historyService.getInitialTime()) : 0;
+	  this.debugLog(`Get LastActivation ${this.accessory.displayName}: ${lastActivation}`);
+	  return lastActivation;
+	});
+      await this.setMinMax();
+      motion.getCharacteristic(this.platform.Characteristic.MotionDetected)
+	.on('change', (event: CharacteristicChange) => {
+	  if (event.newValue !== event.oldValue) {
+	    this.infoLog(`MotionSensor state on change: ${JSON.stringify(event)}`);
+	    const sensor = this.accessory.getService(this.platform.Service.MotionSensor);
+            const entry = {
+              time: Math.round(new Date().valueOf()/1000),
+              motion: event.newValue
+            };
+            this.state.lastActivation = entry.time;
+            sensor?.updateCharacteristic(this.platform.eve.Characteristics.LastActivation, Math.max(0, this.state.lastActivation - this.historyService.getInitialTime()));
+            this.historyService.addEntry(entry);
+	  }
+	});
+    }
+    // this.updateHistory();
   }
 
-  async updateHistory() : Promise<void>{
-    const contact = this.state.CurrentPosition > 0 ?
-	  this.platform.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED :
-	  this.platform.Characteristic.ContactSensorState.CONTACT_DETECTED;
-    const motion = this.state.CurrentPosition > 0 ? 1 : 0;
-    this.historyService.addEntry ({
-      time: Math.round(new Date().valueOf()/1000),
-      contact: contact
-    });
-    this.historyService.addEntry ({
-      time: Math.round(new Date().valueOf()/1000),
-      motion: motion
-    });
-    this.historyService.addEntry ({
-      time: Math.round(new Date().valueOf()/1000),
-      lux: this.state.CurrentAmbientLightLevel
-    });
-    setTimeout(() => {
-      this.updateHistory();
-    }, 10 * 60 * 1000);
-  }
+  // async updateHistory() : Promise<void>{
+  //   const contact = this.state.CurrentPosition > 0 ?
+  // 	  this.platform.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED :
+  // 	  this.platform.Characteristic.ContactSensorState.CONTACT_DETECTED;
+  //   const motion = this.state.CurrentPosition > 0 ? 1 : 0;
+  //   this.historyService.addEntry ({
+  //     time: Math.round(new Date().valueOf()/1000),
+  //     contact: contact
+  //   });
+  //   this.historyService.addEntry ({
+  //     time: Math.round(new Date().valueOf()/1000),
+  //     motion: motion
+  //   });
+  //   this.historyService.addEntry ({
+  //     time: Math.round(new Date().valueOf()/1000),
+  //     lux: this.state.CurrentAmbientLightLevel
+  //   });
+  //   setTimeout(() => {
+  //     this.updateHistory();
+  //   }, 10 * 60 * 1000);
+  // }
 
   async setupPersist(device: device & devicesConfig, user: string): Promise<void> {
     const persist = NodePersist.create();
@@ -870,6 +886,10 @@ export class Curtain {
         this.lightSensorService?.updateCharacteristic(this.platform.Characteristic.CurrentAmbientLightLevel, this.state.CurrentAmbientLightLevel);
         this.debugLog(`Curtain: ${this.accessory.displayName}` + ` updateCharacteristic CurrentAmbientLightLevel: ${this.state.CurrentAmbientLightLevel}`);
         this.mqttPublish('CurrentAmbientLightLevel', this.state.CurrentAmbientLightLevel);
+	this.historyService?.addEntry ({
+	  time: Math.round(new Date().valueOf()/1000),
+	  lux: this.state.CurrentAmbientLightLevel
+	});
       }
     }
     if (this.device.ble) {
