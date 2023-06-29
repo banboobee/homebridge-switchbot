@@ -84,15 +84,21 @@ export class Curtain {
     this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
     if (device.history === true) {
       // initialize when this accessory is newly created.
-      this.accessory.context.lastActivation ??= 0;
-      this.accessory.context.timesOpened ??= 0;
-      this.accessory.context.lastReset ??= 0;
+      //this.accessory.context.lastActivation ??= 0;	// requires node 15 and above
+      //this.accessory.context.timesOpened ??= 0;
+      //this.accessory.context.lastReset ??= 0;
+      this.accessory.context.lastActivation = this.accessory.context.lastActivation ?? 0;
+      this.accessory.context.timesOpened = this.accessory.context.timesOpened ?? 0;
+      this.accessory.context.lastReset = this.accessory.context.lastReset ?? 0;
     } else {
       // discards cached values if history is turned off
       this.accessory.context.lastActivation = undefined;
       this.accessory.context.timesOpened = undefined;
       this.accessory.context.lastReset = undefined;
     }
+    this.infoLog(
+      `${this.accessory.displayName} history: ${device.history}, context: {lastActivation:${this.accessory.context.lastActivation}, timesOpened:${this.accessory.context.timesOpened}, lastReset:${this.accessory.context.lastReset}}`
+    );
 
     // this is subject we use to track when we need to POST changes to the SwitchBot API
     this.doCurtainUpdate = new Subject();
