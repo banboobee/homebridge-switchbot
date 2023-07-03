@@ -91,13 +91,13 @@ export class Curtain {
       this.accessory.context.timesOpened = this.accessory.context.timesOpened ?? 0;
       this.accessory.context.lastReset = this.accessory.context.lastReset ?? 0;
     } else {
-      // discards cached values if history is turned off
-      this.accessory.context.lastActivation = undefined;
-      this.accessory.context.timesOpened = undefined;
-      this.accessory.context.lastReset = undefined;
+      // removes cached values if history is turned off
+      delete this.accessory.context.lastActivation;
+      delete this.accessory.context.timesOpened;
+      delete this.accessory.context.lastReset;
     }
     this.infoLog(
-      `${this.accessory.displayName} history: ${device.history}, context: {lastActivation:${this.accessory.context.lastActivation}, timesOpened:${this.accessory.context.timesOpened}, lastReset:${this.accessory.context.lastReset}}`
+      `${this.accessory.displayName} history:${device.history}, context:{lastActivation:${this.accessory.context.lastActivation}, timesOpened:${this.accessory.context.timesOpened}, lastReset:${this.accessory.context.lastReset}}`
     );
 
     // this is subject we use to track when we need to POST changes to the SwitchBot API
