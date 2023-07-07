@@ -8,7 +8,6 @@ import { Context } from 'vm';
 import { MqttClient } from 'mqtt';
 import { connectAsync } from 'async-mqtt';
 import { hostname } from 'os';
-import * as path from 'path';
 
 export class Curtain {
   // Services
@@ -17,15 +16,13 @@ export class Curtain {
   batteryService?: Service;
 
   // Characteristic Values
-  CurrentPosition: CharacteristicValue;
-  PositionState: CharacteristicValue;
-  TargetPosition: CharacteristicValue;
+  CurrentPosition!: CharacteristicValue;
+  PositionState!: CharacteristicValue;
+  TargetPosition!: CharacteristicValue;
   CurrentAmbientLightLevel?: CharacteristicValue;
   BatteryLevel?: CharacteristicValue;
   StatusLowBattery?: CharacteristicValue;
   lastActivation?: number;
-  timesOpened: number = 0;
-  lastReset?: CharacteristicValue;
 
   // OpenAPI Others
   deviceStatus!: deviceStatusResponse;
@@ -84,20 +81,13 @@ export class Curtain {
     this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
     if (device.history === true) {
       // initialize when this accessory is newly created.
-      //this.accessory.context.lastActivation ??= 0;	// requires node 15 and above
-      //this.accessory.context.timesOpened ??= 0;
-      //this.accessory.context.lastReset ??= 0;
       this.accessory.context.lastActivation = this.accessory.context.lastActivation ?? 0;
-      this.accessory.context.timesOpened = this.accessory.context.timesOpened ?? 0;
-      this.accessory.context.lastReset = this.accessory.context.lastReset ?? 0;
     } else {
       // removes cached values if history is turned off
       delete this.accessory.context.lastActivation;
-      delete this.accessory.context.timesOpened;
-      delete this.accessory.context.lastReset;
     }
     this.infoLog(
-      `${this.accessory.displayName} history:${device.history}, context:{lastActivation:${this.accessory.context.lastActivation}, timesOpened:${this.accessory.context.timesOpened}, lastReset:${this.accessory.context.lastReset}}`
+      `${this.accessory.displayName} history:${device.history}, context:{lastActivation:${this.accessory.context.lastActivation}}`
     );
 
     // this is subject we use to track when we need to POST changes to the SwitchBot API
