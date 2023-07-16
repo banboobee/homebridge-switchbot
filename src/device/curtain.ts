@@ -6,8 +6,9 @@ import { interval, Subject } from 'rxjs';
 import { connectAsync } from 'async-mqtt';
 import { SwitchBotPlatform } from '../platform';
 import { debounceTime, skipWhile, take, tap } from 'rxjs/operators';
-import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
+import { Service, PlatformAccessory, CharacteristicValue, CharacteristicChange } from 'homebridge';
 import { device, devicesConfig, serviceData, switchbot, deviceStatus, ad, Devices } from '../settings';
+import { hostname } from 'os';
 
 export class Curtain {
   // Services
@@ -22,6 +23,7 @@ export class Curtain {
   CurrentAmbientLightLevel?: CharacteristicValue;
   BatteryLevel?: CharacteristicValue;
   StatusLowBattery?: CharacteristicValue;
+  lastActivation?: number;
 
   // OpenAPI Others
   deviceStatus!: any; //deviceStatusResponse;
@@ -69,6 +71,9 @@ export class Curtain {
   private readonly BLE = (this.device.connectionType === 'BLE' || this.device.connectionType === 'BLE/OpenAPI');
   private readonly OpenAPI = (this.device.connectionType === 'OpenAPI' || this.device.connectionType === 'BLE/OpenAPI');
 
+  // EVE history service handler
+  historyService: any = null;
+
   constructor(private readonly platform: SwitchBotPlatform, private accessory: PlatformAccessory, public device: device & devicesConfig) {
     // default placeholders
     this.logs(device);
@@ -109,9 +114,9 @@ export class Curtain {
     // set the service name, this is what is displayed as the default name on the Home app
     // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
     this.windowCoveringService.setCharacteristic(this.platform.Characteristic.Name, accessory.displayName);
-    if (!this.windowCoveringService.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
-      this.windowCoveringService.addCharacteristic(this.platform.Characteristic.ConfiguredName, accessory.displayName);
-    }
+    // if (!this.windowCoveringService.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
+    //   this.windowCoveringService.addCharacteristic(this.platform.Characteristic.ConfiguredName, accessory.displayName);
+    // }
 
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/WindowCovering
@@ -153,9 +158,9 @@ export class Curtain {
       `${accessory.displayName} Light Sensor`;
 
       this.lightSensorService.setCharacteristic(this.platform.Characteristic.Name, `${accessory.displayName} Light Sensor`);
-      if (!this.lightSensorService?.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
-        this.lightSensorService.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Light Sensor`);
-      }
+      // if (!this.lightSensorService?.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
+      //   this.lightSensorService.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Light Sensor`);
+      // }
     } else {
       this.debugLog(`${this.device.deviceType}: ${accessory.displayName} Light Sensor Service Not Added`);
     }
@@ -171,9 +176,9 @@ export class Curtain {
       `${accessory.displayName} Battery`;
 
       this.batteryService.setCharacteristic(this.platform.Characteristic.Name, `${accessory.displayName} Battery`);
-      if (!this.batteryService.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
-        this.batteryService.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Battery`);
-      }
+      // if (!this.batteryService.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
+      //   this.batteryService.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Battery`);
+      // }
     } else {
       this.debugLog(`${this.device.deviceType}: ${accessory.displayName} Battery Service Not Added`);
     }
@@ -218,8 +223,68 @@ export class Curtain {
         }
         this.curtainUpdateInProgress = false;
       });
+
+    // Setup EVE history features
+    this.setupHistoryService(device);
   }
 
+  /*
+   * Setup EVE history features for curtain devices. 
+   */
+  async setupHistoryService(device: device & devicesConfig): Promise<void> {
+    if (device.history !== true) {
+      return;
+    }
+    // Retrieve persist state and re-retrieve current state to sync them.
+    await this.refreshRate(device);
+    await this.updateHomeKitCharacteristics();
+    
+    const mac = this.device.deviceId!.match(/.{1,2}/g)!.join(':').toLowerCase();
+    const motion: Service =
+	  this.accessory.getService(this.platform.Service.MotionSensor) ||
+	  this.accessory.addService(this.platform.Service.MotionSensor, `${this.accessory.displayName} Motion`);
+    this.historyService = new this.platform.fakegatoAPI('custom', this.accessory,
+							{log: this.platform.log, storage: 'fs',
+							 filename: `${hostname().split(".")[0]}_${mac}_persist.json`
+							});
+    motion.addOptionalCharacteristic(this.platform.eve.Characteristics.LastActivation);
+    motion.getCharacteristic(this.platform.eve.Characteristics.LastActivation)
+      .onGet(() => {
+	const lastActivation = this.accessory.context.lastActivation ?
+	      Math.max(0, this.accessory.context.lastActivation - this.historyService.getInitialTime()) : 0;
+	//this.debugLog(`Get LastActivation ${this.accessory.displayName}: ${lastActivation}`);
+	return lastActivation;
+      });
+    await this.setMinMax();
+    motion.getCharacteristic(this.platform.Characteristic.MotionDetected)
+      .on('change', (event: CharacteristicChange) => {
+	if (event.newValue !== event.oldValue) {
+	  this.infoLog(`MotionSensor state on change: ${JSON.stringify(event)}`);
+	  const sensor = this.accessory.getService(this.platform.Service.MotionSensor);
+          const entry = {
+            time: Math.round(new Date().valueOf()/1000),
+            motion: event.newValue
+          };
+          this.accessory.context.lastActivation = entry.time;
+          sensor?.updateCharacteristic(this.platform.eve.Characteristics.LastActivation,
+				       Math.max(0, this.accessory.context.lastActivation - this.historyService.getInitialTime()));
+          this.historyService.addEntry(entry);
+	}
+      });
+    this.updateHistory();
+  }
+
+  async updateHistory() : Promise<void>{
+    const motion = Number(this.CurrentPosition) > 0 ? 1 : 0;
+    this.historyService.addEntry ({
+      time: Math.round(new Date().valueOf()/1000),
+      motion: motion
+    });
+    setTimeout(() => {
+      this.updateHistory();
+    }, 10 * 60 * 1000);
+  }
+  
   /**
    * Parse the device status from the SwitchBot api
    */
@@ -722,8 +787,12 @@ export class Curtain {
         }
         this.accessory.context.CurrentAmbientLightLevel = this.CurrentAmbientLightLevel;
         this.lightSensorService?.updateCharacteristic(this.platform.Characteristic.CurrentAmbientLightLevel, this.CurrentAmbientLightLevel);
-        this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName}`
-          + ` updateCharacteristic CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`);
+         this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName}`
+           + ` updateCharacteristic CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`);
+	this.historyService?.addEntry ({
+	  time: Math.round(new Date().valueOf()/1000),
+	  lux: this.CurrentAmbientLightLevel
+	});
       }
     }
     if (this.BLE) {
@@ -846,6 +915,7 @@ export class Curtain {
   }
 
   async setMinMax(): Promise<void> {
+    const motion = this.accessory.getService(this.platform.Service.MotionSensor);
     if (this.device.curtain?.set_min) {
       if (Number(this.CurrentPosition) <= this.device.curtain?.set_min) {
         this.CurrentPosition = 0;
@@ -855,6 +925,11 @@ export class Curtain {
       if (Number(this.CurrentPosition) >= this.device.curtain?.set_max) {
         this.CurrentPosition = 100;
       }
+    }
+    if (motion) {
+      const state = Number(this.CurrentPosition) > 0 ? 1 : 0;
+      motion.updateCharacteristic(this.platform.Characteristic.MotionDetected, state);
+      //this.debugLog(`${this.accessory.displayName} MotionSensor state updated: ${state}`);
     }
   }
 
@@ -1004,6 +1079,17 @@ export class Curtain {
     } else {
       this.PositionState = this.accessory.context.PositionState;
     }
+
+    if (this.device.history === true) {
+      // initialize when this accessory is newly created.
+      this.accessory.context.lastActivation = this.accessory.context.lastActivation ?? 0;
+    } else {
+      // removes cached values if history is turned off
+      delete this.accessory.context.lastActivation;
+    }
+    this.infoLog(
+      `${this.accessory.displayName} history:${this.device.history}, context:{lastActivation:${this.accessory.context.lastActivation}}`
+    );
   }
 
   async refreshRate(device: device & devicesConfig): Promise<void> {
