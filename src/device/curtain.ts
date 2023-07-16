@@ -471,7 +471,9 @@ export class Curtain {
     if (!this.device.enableCloudService && this.OpenAPI) {
       this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} refreshStatus enableCloudService: ${this.device.enableCloudService}`);
     } else if (this.BLE) {
-      await this.BLERefreshStatus();
+      this.platform.BLEQue.use(async () => {
+	await this.BLERefreshStatus();
+      })
     } else if (this.OpenAPI && this.platform.config.credentials?.token) {
       await this.openAPIRefreshStatus();
     } else {
@@ -493,7 +495,7 @@ export class Curtain {
     this.getCustomBLEAddress(switchbot);
     // Start to monitor advertisement packets
     if (switchbot !== false) {
-      switchbot
+      await switchbot
         .startScan({
           model: 'c',
           id: this.device.bleMac,
