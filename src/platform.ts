@@ -29,6 +29,7 @@ import { Buffer } from 'buffer';
 import { queueScheduler } from 'rxjs';
 import fakegato from 'fakegato-history';
 import { EveHomeKitTypes } from 'homebridge-lib';
+import { Mutex } from 'await-semaphore';
 
 import { readFileSync, writeFileSync } from 'fs';
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, Service, Characteristic } from 'homebridge';
@@ -53,6 +54,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 
   public readonly fakegatoAPI: any;
   public readonly eve: any;
+  public readonly BLEQue: Mutex = new Mutex();
 
   constructor(public readonly log: Logger, public readonly config: SwitchBotPlatformConfig, public readonly api: API) {
     this.logs();
