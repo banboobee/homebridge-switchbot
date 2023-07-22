@@ -85,7 +85,7 @@ export class Meter {
       .getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'SwitchBot')
       .setCharacteristic(this.platform.Characteristic.Model, 'METERTH-S1')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, (device.deviceId+"1"))
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, device.deviceId)
       .setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.FirmwareRevision(accessory, device))
       .getCharacteristic(this.platform.Characteristic.FirmwareRevision)
       .updateValue(this.FirmwareRevision(accessory, device));
