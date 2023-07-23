@@ -592,25 +592,24 @@ export class Meter {
   }
 
   async context() {
-    if (this.CurrentRelativeHumidity === undefined) {
+    if (this.accessory.context.CurrentRelativeHumidity === undefined) {
       this.CurrentRelativeHumidity = 0;
     } else {
       this.CurrentRelativeHumidity = this.accessory.context.CurrentRelativeHumidity;
     }
-    if (this.CurrentTemperature === undefined) {
+    if (this.accessory.context.CurrentTemperature === undefined) {
       this.CurrentTemperature = 0;
     } else {
       this.CurrentTemperature = this.accessory.context.CurrentTemperature;
     }
     if (this.BLE) {
-      if (this.BatteryLevel === undefined) {
+      if (this.accessory.context.BatteryLevel === undefined) {
         this.BatteryLevel = 100;
       } else {
         this.BatteryLevel = this.accessory.context.BatteryLevel;
       }
-      if (this.StatusLowBattery === undefined) {
+      if (this.accessory.context.StatusLowBattery === undefined) {
         this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
-        this.accessory.context.StatusLowBattery = this.StatusLowBattery;
       } else {
         this.StatusLowBattery = this.accessory.context.StatusLowBattery;
       }
