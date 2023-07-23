@@ -235,11 +235,17 @@ export class Curtain {
     if (device.history !== true) {
       return;
     }
-    // Retrieve persist state and re-retrieve current state to sync them.
-    await this.refreshRate(device);
-    await this.updateHomeKitCharacteristics();
     
-    const mac = this.device.deviceId!.match(/.{1,2}/g)!.join(':').toLowerCase();
+    const mac = this.device
+      .deviceId!.match(/.{1,2}/g)!
+      .join(':')
+      .toLowerCase();
+    this.historyService =
+      new this.platform.fakegatoAPI('custom', this.accessory, {
+	log: this.platform.log,
+	storage: 'fs',
+	filename: `${hostname().split(".")[0]}_${mac}_persist.json`
+      });
     const motion: Service =
 	  this.accessory.getService(this.platform.Service.MotionSensor) ||
 	  this.accessory.addService(this.platform.Service.MotionSensor, `${this.accessory.displayName} Motion`);
@@ -251,23 +257,24 @@ export class Curtain {
     motion.getCharacteristic(this.platform.eve.Characteristics.LastActivation)
       .onGet(() => {
 	const lastActivation = this.accessory.context.lastActivation ?
-	      Math.max(0, this.accessory.context.lastActivation - this.historyService.getInitialTime()) : 0;
-	//this.debugLog(`Get LastActivation ${this.accessory.displayName}: ${lastActivation}`);
+	      Math.max(0, this.accessory.context.lastActivation -
+		       this.historyService.getInitialTime()) : 0;
 	return lastActivation;
       });
     await this.setMinMax();
     motion.getCharacteristic(this.platform.Characteristic.MotionDetected)
       .on('change', (event: CharacteristicChange) => {
 	if (event.newValue !== event.oldValue) {
-	  this.infoLog(`MotionSensor state on change: ${JSON.stringify(event)}`);
 	  const sensor = this.accessory.getService(this.platform.Service.MotionSensor);
           const entry = {
             time: Math.round(new Date().valueOf()/1000),
             motion: event.newValue
           };
           this.accessory.context.lastActivation = entry.time;
-          sensor?.updateCharacteristic(this.platform.eve.Characteristics.LastActivation,
-				       Math.max(0, this.accessory.context.lastActivation - this.historyService.getInitialTime()));
+          sensor?.updateCharacteristic(
+	    this.platform.eve.Characteristics.LastActivation,
+	    Math.max(0, this.accessory.context.lastActivation -
+		     this.historyService.getInitialTime()));
           this.historyService.addEntry(entry);
 	}
       });
@@ -787,12 +794,14 @@ export class Curtain {
         }
         this.accessory.context.CurrentAmbientLightLevel = this.CurrentAmbientLightLevel;
         this.lightSensorService?.updateCharacteristic(this.platform.Characteristic.CurrentAmbientLightLevel, this.CurrentAmbientLightLevel);
-         this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName}`
-           + ` updateCharacteristic CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`);
-	this.historyService?.addEntry ({
-	  time: Math.round(new Date().valueOf()/1000),
-	  lux: this.CurrentAmbientLightLevel
-	});
+        this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName}`
+          + ` updateCharacteristic CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`);
+	if (this.device.history) {
+	  this.historyService?.addEntry ({
+	    time: Math.round(new Date().valueOf()/1000),
+	    lux: this.CurrentAmbientLightLevel
+	  });
+	}
       }
     }
     if (this.BLE) {
@@ -915,7 +924,6 @@ export class Curtain {
   }
 
   async setMinMax(): Promise<void> {
-    const motion = this.accessory.getService(this.platform.Service.MotionSensor);
     if (this.device.curtain?.set_min) {
       if (Number(this.CurrentPosition) <= this.device.curtain?.set_min) {
         this.CurrentPosition = 0;
@@ -926,10 +934,10 @@ export class Curtain {
         this.CurrentPosition = 100;
       }
     }
-    if (motion) {
+    if (this.device.history) {
+      const motion = this.accessory.getService(this.platform.Service.MotionSensor);
       const state = Number(this.CurrentPosition) > 0 ? 1 : 0;
-      motion.updateCharacteristic(this.platform.Characteristic.MotionDetected, state);
-      //this.debugLog(`${this.accessory.displayName} MotionSensor state updated: ${state}`);
+      motion?.updateCharacteristic(this.platform.Characteristic.MotionDetected, state);
     }
   }
 
@@ -1062,24 +1070,43 @@ export class Curtain {
   }
 
   async context() {
-    if (this.CurrentPosition === undefined) {
+    if (this.accessory.context.CurrentPosition === undefined) {
       this.CurrentPosition = 0;
     } else {
       this.CurrentPosition = this.accessory.context.CurrentPosition;
     }
 
-    if (this.TargetPosition === undefined) {
+    if (this.accessory.context.TargetPosition === undefined) {
       this.TargetPosition = 0;
     } else {
       this.TargetPosition = this.accessory.context.TargetPosition;
     }
 
-    if (this.PositionState === undefined) {
+    if (this.accessory.context.PositionState === undefined) {
       this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
     } else {
       this.PositionState = this.accessory.context.PositionState;
     }
 
+    if (!this.device.curtain?.hide_lightsensor) {
+      if (this.accessory.context.CurrentAmbientLightLevel !== undefined) {
+	this.CurrentAmbientLightLevel = this.accessory.context.CurrentAmbientLightLevel;
+      }
+    }
+
+    if (this.BLE) {
+      if (this.accessory.context.BatteryLevel === undefined) {
+	this.BatteryLevel = 100;
+      } else {
+	this.BatteryLevel = this.accessory.context.BatteryLevel;
+      }
+      if (this.accessory.context.StatusLowBattery === undefined) {
+	this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+      } else {
+	this.StatusLowBattery = this.accessory.context.StatusLowBattery;
+      }
+    }
+    
     if (this.device.history === true) {
       // initialize when this accessory is newly created.
       this.accessory.context.lastActivation = this.accessory.context.lastActivation ?? 0;
@@ -1087,9 +1114,6 @@ export class Curtain {
       // removes cached values if history is turned off
       delete this.accessory.context.lastActivation;
     }
-    this.infoLog(
-      `${this.accessory.displayName} history:${this.device.history}, context:{lastActivation:${this.accessory.context.lastActivation}}`
-    );
   }
 
   async refreshRate(device: device & devicesConfig): Promise<void> {
