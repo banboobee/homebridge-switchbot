@@ -85,7 +85,7 @@ export class Meter {
       .getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'SwitchBot')
       .setCharacteristic(this.platform.Characteristic.Model, 'METERTH-S1')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, device.deviceId!)
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, device.deviceId)
       .setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.FirmwareRevision(accessory, device))
       .getCharacteristic(this.platform.Characteristic.FirmwareRevision)
       .updateValue(this.FirmwareRevision(accessory, device));
@@ -102,9 +102,9 @@ export class Meter {
       `${accessory.displayName} Temperature Sensor`;
 
       this.temperatureservice.setCharacteristic(this.platform.Characteristic.Name, `${accessory.displayName} Temperature Sensor`);
-      if (!this.temperatureservice.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
-        this.temperatureservice.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Temperature Sensor`);
-      }
+      // if (!this.temperatureservice.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
+      //   this.temperatureservice.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Temperature Sensor`);
+      // }
       this.temperatureservice
         .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
         .setProps({
@@ -133,9 +133,9 @@ export class Meter {
       `${accessory.displayName} Humidity Sensor`;
 
       this.humidityservice.setCharacteristic(this.platform.Characteristic.Name, `${accessory.displayName} Humidity Sensor`);
-      if (!this.humidityservice.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
-        this.humidityservice.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Humidity Sensor`);
-      }
+      // if (!this.humidityservice.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
+      //   this.humidityservice.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Humidity Sensor`);
+      // }
       this.humidityservice
         .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
         .setProps({
@@ -159,9 +159,9 @@ export class Meter {
       `${accessory.displayName} Battery`;
 
       this.batteryService.setCharacteristic(this.platform.Characteristic.Name, `${accessory.displayName} Battery`);
-      if (!this.batteryService.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
-        this.batteryService.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Battery`);
-      }
+      // if (!this.batteryService.testCharacteristic(this.platform.Characteristic.ConfiguredName)) {
+      //   this.batteryService.addCharacteristic(this.platform.Characteristic.ConfiguredName, `${accessory.displayName} Battery`);
+      // }
       this.batteryService.setCharacteristic(this.platform.Characteristic.ChargingState, this.platform.Characteristic.ChargingState.NOT_CHARGEABLE);
     } else {
       this.debugLog(`${this.device.deviceType}: ${accessory.displayName} Battery Service Not Added`);
@@ -589,25 +589,24 @@ export class Meter {
   }
 
   async context() {
-    if (this.CurrentRelativeHumidity === undefined) {
+    if (this.accessory.context.CurrentRelativeHumidity === undefined) {
       this.CurrentRelativeHumidity = 0;
     } else {
       this.CurrentRelativeHumidity = this.accessory.context.CurrentRelativeHumidity;
     }
-    if (this.CurrentTemperature === undefined) {
+    if (this.accessory.context.CurrentTemperature === undefined) {
       this.CurrentTemperature = 0;
     } else {
       this.CurrentTemperature = this.accessory.context.CurrentTemperature;
     }
     if (this.BLE) {
-      if (this.BatteryLevel === undefined) {
+      if (this.accessory.context.BatteryLevel === undefined) {
         this.BatteryLevel = 100;
       } else {
         this.BatteryLevel = this.accessory.context.BatteryLevel;
       }
-      if (this.StatusLowBattery === undefined) {
+      if (this.accessory.context.StatusLowBattery === undefined) {
         this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
-        this.accessory.context.StatusLowBattery = this.StatusLowBattery;
       } else {
         this.StatusLowBattery = this.accessory.context.StatusLowBattery;
       }
