@@ -468,7 +468,9 @@ export class Curtain {
     if (!this.device.enableCloudService && this.OpenAPI) {
       this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} refreshStatus enableCloudService: ${this.device.enableCloudService}`);
     } else if (this.BLE) {
-      await this.BLERefreshStatus();
+      this.platform.BLEQue.use(async () => {
+	await this.BLERefreshStatus();
+      })
     } else if (this.OpenAPI && this.platform.config.credentials?.token) {
       await this.openAPIRefreshStatus();
     } else {
@@ -490,7 +492,7 @@ export class Curtain {
     this.getCustomBLEAddress(switchbot);
     // Start to monitor advertisement packets
     if (switchbot !== false) {
-      switchbot
+      await switchbot
         .startScan({
           model: 'c',
           id: this.device.bleMac,
@@ -606,9 +608,9 @@ export class Curtain {
       if (switchbot !== false) {
         await this.retry({
           max: this.maxRetry(),
-          fn: () => {
-            return switchbot
-              .discover({ model: 'c', quick: true, id: this.device.bleMac })
+          fn: async () => {
+            return await switchbot
+              .discover({ duration: 5*1000, model: 'c', quick: true, id: this.device.bleMac })
               .then(async (device_list: any) => {
                 this.infoLog(`${this.accessory.displayName} Target Position: ${this.TargetPosition}`);
                 return await device_list[0].runToPos(100 - Number(this.TargetPosition), adjustedMode);
@@ -644,7 +646,7 @@ export class Curtain {
       this.infoLog(e);
       this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} Retrying`);
       await sleep(1000);
-      return this.retry({ max: max - 1, fn });
+      return await this.retry({ max: max - 1, fn });
     });
   }
 
