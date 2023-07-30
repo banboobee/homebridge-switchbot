@@ -284,6 +284,13 @@ export class Curtain {
       time: Math.round(new Date().valueOf()/1000),
       motion: motion
     });
+    if (!this.device.curtain?.hide_lightsensor) {
+      await this.refreshStatus();
+      this.historyService.addEntry ({
+	time: Math.round(new Date().valueOf()/1000),
+	lux: this.CurrentAmbientLightLevel
+      });
+    }
     setTimeout(() => {
       this.updateHistory();
     }, 10 * 60 * 1000);
