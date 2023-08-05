@@ -284,13 +284,6 @@ export class Curtain {
       time: Math.round(new Date().valueOf()/1000),
       motion: motion
     });
-    if (!this.device.curtain?.hide_lightsensor) {
-      await this.refreshStatus();
-      this.historyService.addEntry ({
-	time: Math.round(new Date().valueOf()/1000),
-	lux: this.CurrentAmbientLightLevel
-      });
-    }
     setTimeout(() => {
       this.updateHistory();
     }, 10 * 60 * 1000);
@@ -476,7 +469,16 @@ export class Curtain {
       this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} refreshStatus enableCloudService: ${this.device.enableCloudService}`);
     } else if (this.BLE) {
       this.platform.BLEQue.use(async () => {
-	await this.BLERefreshStatus();
+	return new Promise(async (resolve, reject) => {
+	  const timeout = setTimeout(() => {
+	    reject(new Error(`timed out of ${this.scanDuration+1} seconds.`));
+	  }, this.scanDuration * 1000 + 1000);
+	  await this.BLERefreshStatus();
+	  clearTimeout(timeout);
+	  resolve(true);
+	}).catch((e) => {
+	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLErefreshStatus: ${e}`);
+	})
       })
     } else if (this.OpenAPI && this.platform.config.credentials?.token) {
       await this.openAPIRefreshStatus();
@@ -490,6 +492,7 @@ export class Curtain {
   async BLERefreshStatus(): Promise<void> {
     this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus`);
     const switchbot = await this.platform.connectBLE();
+    let scaned = false;
     // Convert to BLE Address
     this.device.bleMac = this.device
       .deviceId!.match(/.{1,2}/g)!
@@ -499,7 +502,7 @@ export class Curtain {
     this.getCustomBLEAddress(switchbot);
     // Start to monitor advertisement packets
     if (switchbot !== false) {
-      await switchbot
+      return await switchbot
         .startScan({
           model: 'c',
           id: this.device.bleMac,
@@ -507,6 +510,7 @@ export class Curtain {
         .then(async () => {
           // Set an event hander
           switchbot.onadvertisement = async (ad: any) => {
+	    scaned = true;
             this.address = ad.address;
             this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} Config BLE Address: ${this.device.bleMac},`
               + ` BLE Address Found: ${this.address}`);
@@ -536,16 +540,19 @@ export class Curtain {
         })
         .then(async () => {
           // Stop to monitor
-          await this.stopScanning(switchbot);
+	  if (scaned === false) {
+            this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus failed to scan. Keeps last values.`);
+	  }
+          return await this.stopScanning(switchbot);
         })
         .catch(async (e: any) => {
           this.apiError(e);
           this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed BLERefreshStatus with ${this.device.connectionType}`
             + ` Connection, Error Message: ${JSON.stringify(e.message)}`);
-          await this.BLERefreshConnection(switchbot);
+          return await this.BLERefreshConnection(switchbot);
         });
     } else {
-      await this.BLERefreshConnection(switchbot);
+      return await this.BLERefreshConnection(switchbot);
     }
   }
 
@@ -867,7 +874,7 @@ export class Curtain {
   }
 
   async stopScanning(switchbot: any) {
-    await switchbot.stopScan();
+    switchbot.stopScan();
     if (this.connected) {
       await this.BLEparseStatus();
       await this.updateHomeKitCharacteristics();
@@ -889,7 +896,7 @@ export class Curtain {
         };
         await sleep(10000);
         // Stop to monitor
-        await switchbot.stopScan();
+        switchbot.stopScan();
       })();
     }
   }
