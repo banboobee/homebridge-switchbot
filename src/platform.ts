@@ -26,7 +26,7 @@ import { AirConditioner } from './irdevice/airconditioner';
 import { request } from 'undici';
 import crypto, { randomUUID } from 'crypto';
 import { Buffer } from 'buffer';
-//import { queueScheduler } from 'rxjs';
+import { queueScheduler } from 'rxjs';
 import fakegato from 'fakegato-history';
 import { EveHomeKitTypes } from 'homebridge-lib';
 import { Mutex } from 'await-semaphore';
@@ -54,7 +54,6 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   public readonly fakegatoAPI: any;
   public readonly eve: any;
   public readonly BLEQue: Mutex = new Mutex();
-  public readonly BLEInit: Mutex = new Mutex();	// need two queues to avoid dead-lock.
 
   constructor(
     public readonly log: Logger,
@@ -2221,10 +2220,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
     let switchbot: any;
     try {
       Switchbot = require('node-switchbot');
-      // queueScheduler.schedule(() => (switchbot = new Switchbot()));
-      await this.BLEInit.use(async () => {
-	switchbot = await new Switchbot();
-      })
+      queueScheduler.schedule(() => (switchbot = new Switchbot()));
     } catch (e: any) {
       switchbot = false;
       this.errorLog(`Was 'node-switchbot' found: ${switchbot}`);
