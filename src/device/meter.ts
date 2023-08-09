@@ -274,12 +274,13 @@ export class Meter {
   async BLERefreshStatus(): Promise<void> {
     this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus`);
     const switchbot = await this.platform.connectBLE();
-    let scaned = false;
     // Convert to BLE Address
     this.device.bleMac = this.device
       .deviceId!.match(/.{1,2}/g)!
       .join(':')
       .toLowerCase();
+    // find context device to cache BLE advertisement packets
+    const device = this.platform.accessories.find(x => x.context.device.bleMac === this.device.bleMac)!.context.device;
     this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLE Address: ${this.device.bleMac}`);
     this.getCustomBLEAddress(switchbot);
     // Start to monitor advertisement packets
@@ -287,48 +288,67 @@ export class Meter {
       return await switchbot
         .startScan({
           model: 'T',
-          id: this.device.bleMac,
+          //id: this.device.bleMac,
         })
         .then(async () => {
           // Set an event hander
           switchbot.onadvertisement = async (ad: ad) => {
-	    scaned = true;
-            this.debugLog(
-              `${this.device.deviceType}: ${this.accessory.displayName} Config BLE Address: ${this.device.bleMac},` +
-              ` BLE Address Found: ${ad.address}`,
-            );
-            if (ad.serviceData.humidity! > 0) {
-              // reject unreliable data
-              this.BLE_CurrentRelativeHumidity = ad.serviceData.humidity;
-            }
-            this.BLE_CurrentTemperature = ad.serviceData.temperature;
-            this.BLE_Celsius = ad.serviceData.temperature!.c;
-            this.BLE_Fahrenheit = ad.serviceData.temperature!.f;
-            this.BLE_BatteryLevel = ad.serviceData.battery;
-            this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} serviceData: ${JSON.stringify(ad.serviceData)}`);
-            this.debugLog(
-              `${this.device.deviceType}: ${this.accessory.displayName} model: ${ad.serviceData.model}, modelName: ${ad.serviceData.modelName}, ` +
-              `temperature: ${JSON.stringify(ad.serviceData.temperature?.c)}, humidity: ${ad.serviceData.humidity}, ` +
-              `battery: ${ad.serviceData.battery}`,
-            );
-
-            if (ad.serviceData) {
-              this.BLE_IsConnected = true;
-              this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} connected: ${this.BLE_IsConnected}`);
-              await this.stopScanning(switchbot);
-            } else {
-              this.BLE_IsConnected = false;
-              this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} connected: ${this.BLE_IsConnected}`);
-            }
-          };
+	    const accessory = this.platform.accessories.find(x => x.context.device.bleMac === ad.address);
+	    if (accessory) {
+	      // use context area to cache the advertisement packets.
+		const meter = accessory.context.device;
+		if (meter?.cache === undefined || meter.cache.timestamp! <= 0) {
+		    meter.cache = {timestamp: Date.now(),
+				   address: ad.address,
+				   serviceData: ad.serviceData
+				  };
+		    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} `
+		      + `Found: ${meter.cache.address}, `
+		      + `serviceData: ${JSON.stringify(meter.cache.serviceData)}, `
+		      + `timestamp: ${meter.cache.timestamp}`);
+		}
+	    }
+	  }
           // Wait
           return await sleep(this.scanDuration * 1000);
         })
         .then(async () => {
-          // Stop to monitor
-    	  if (scaned === false) {
+	  if (device.cache?.timestamp !== undefined && device.cache.timestamp > 0) {
+	    device.cache.timestamp *= -1;
+            this.debugLog(
+              `${this.device.deviceType}: ${this.accessory.displayName} Config BLE Address: ${this.device.bleMac},` +
+              ` BLE Address Found: ${device.cache!.address}`,
+            );
+            if (device.cache!.serviceData.humidity! > 0) {
+              // reject unreliable data
+              this.BLE_CurrentRelativeHumidity = device.cache!.serviceData.humidity;
+            }
+            this.BLE_CurrentTemperature = device.cache!.serviceData.temperature;
+            this.BLE_Celsius = device.cache!.serviceData.temperature!.c;
+            this.BLE_Fahrenheit = device.cache!.serviceData.temperature!.f;
+            this.BLE_BatteryLevel = device.cache!.serviceData.battery;
+            this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} serviceData: ${JSON.stringify(device.cache!.serviceData)}`);
+            this.debugLog(
+	      `${this.device.deviceType}: ${this.accessory.displayName} `
+	        + `model: ${device.cache!.serviceData.model}, `
+		+ `modelName: ${device.cache!.serviceData.modelName}, `
+		+ `temperature: ${JSON.stringify(device.cache!.serviceData.temperature!.c)}, `
+		+ `humidity: ${device.cache!.serviceData.humidity}, `
+		+ `battery: ${device.cache!.serviceData.battery}`,
+            );
+
+            if (device.cache!.serviceData) {
+              this.BLE_IsConnected = true;
+              this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} connected: ${this.BLE_IsConnected}`);
+            } else {
+              this.BLE_IsConnected = false;
+              this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} connected: ${this.BLE_IsConnected}`);
+            }
+	  } else {
+	    // didn't receive BLE advertisement packets within deviceRefreshRate period.
             this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus failed to scan. Keeps last values.`);
 	  }
+          // Stop to monitor
 	  return await this.stopScanning(switchbot);
         })
         .catch(async (e: any) => {
@@ -660,6 +680,17 @@ export class Meter {
     } else {
       this.StatusLowBattery = this.accessory.context.StatusLowBattery;
     }
+
+    // clear device cache
+    //this.debugLog(`timestamp:${this.accessory.context.device.cache?.timestamp} serviceData:${JSON.stringify(this.accessory.context.device.cache?.serviceData)}`);
+    delete(this.accessory.context.device.cache);
+    // bleMac for context devices to cache while scanning
+    this.accessory.context.device.bleMac =
+      this.accessory.context.device
+      .deviceId!.match(/.{1,2}/g)!
+      .join(':')
+      .toLowerCase();
+    //this.debugLog(`bleMac:${this.accessory.context.device.bleMac}`);
   }
 
   async refreshRate(device: device & devicesConfig): Promise<void> {
