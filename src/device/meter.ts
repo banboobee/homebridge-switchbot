@@ -267,12 +267,19 @@ export class Meter {
     } else if (this.BLE) {
       this.platform.BLEQue.use(async () => {
 	return new Promise(async (resolve, reject) => {
+	  // set timeout long enough. starscan() dosn't return promise sometimes
 	  const timeout = setTimeout(() => {
-	    reject(new Error(`timed out of ${this.scanDuration+1} seconds.`));
-	  }, this.scanDuration * 1000 + 1000);
-	  await this.BLERefreshStatus();
-	  clearTimeout(timeout);
-	  resolve(true);
+	    //reject(new Error(`timed out of ${this.scanDuration+1} seconds.`));
+	    reject(new Error(`timed out of 1 minute.`));
+	  }, 60*1000); //this.scanDuration * 1000 + 1000);
+	  this.BLERefreshStatus()
+	    .then(() => {
+	      resolve(true);
+	    }).catch((e) => {
+	      reject(e);
+	    }).finally(() => {
+	      clearTimeout(timeout);
+	    })
 	}).catch((e) => {
 	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLErefreshStatus: ${e}`);
 	})
@@ -309,21 +316,22 @@ export class Meter {
         })
         .then(async () => {
           // Set an event hander
+	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} start to listen BLE packets.`);
           switchbot.onadvertisement = async (ad: ad) => {
 	    const accessory = this.platform.accessories.find(x => x.context.device.bleMac === ad.address);
 	    if (accessory) {
 	      // use context area to cache the advertisement packets.
-		const meter = accessory.context.device;
-		if (meter?.cache === undefined || meter.cache.timestamp! <= 0) {
-		    meter.cache = {timestamp: Date.now(),
-				   address: ad.address,
-				   serviceData: ad.serviceData
-				  };
-		    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} `
-		      + `Found: ${meter.cache.address}, `
-		      + `serviceData: ${JSON.stringify(meter.cache.serviceData)}, `
-		      + `timestamp: ${meter.cache.timestamp}`);
-		}
+	      const meter = accessory.context.device;
+	      if (meter?.cache === undefined || meter.cache.timestamp! <= 0) {
+		meter.cache = {timestamp: Date.now(),
+			       address: ad.address,
+			       serviceData: ad.serviceData
+			      };
+		this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} `
+		  + `Found: ${meter.cache.address}, `
+		  + `serviceData: ${JSON.stringify(meter.cache.serviceData)}, `
+		  + `timestamp: ${meter.cache.timestamp}`);
+	      }
 	    }
 	  }
           // Wait
