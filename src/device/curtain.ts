@@ -216,6 +216,22 @@ export class Curtain {
         this.curtainUpdateInProgress = false;
       });
 
+    //regisiter webhook event handler
+    if (this.device.enableWebhook) {
+      this.platform.webhookEventHandler.push({
+	deviceId: this.device.deviceId,
+	onWebhook: (context) => {
+	  try {
+	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+	    this.CurrentPosition = 100 - context.slidePosition;
+	    this.TargetPosition = this.CurrentPosition
+	    this.updateHomeKitCharacteristics();
+	  } catch (e: any) {
+	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
+	  }
+	}
+      })
+    }
     // Setup EVE history features
     this.setupHistoryService(device);
   }
