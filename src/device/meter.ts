@@ -171,6 +171,20 @@ export class Meter {
       .subscribe(async () => {
         await this.refreshStatus();
       });
+
+    //regisiter webhook event handler
+    if (this.device.enableWebhook) {
+      this.platform.webhookEventHandler.push({
+	deviceId: this.device.deviceId,
+	onWebhook: (context) => {
+	  try {
+	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+	  } catch (e: any) {
+	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
+	  }
+	}
+      })
+    }
   }
 
   /**
