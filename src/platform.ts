@@ -30,6 +30,10 @@ import { queueScheduler } from 'rxjs';
 import fakegato from 'fakegato-history';
 import { EveHomeKitTypes } from 'homebridge-lib';
 import { Mutex } from 'await-semaphore';
+// import { createServer } from 'http';
+// import { Client } from 'undici';
+// import { once } from 'events';
+import express from 'express';
 
 import { readFileSync, writeFileSync } from 'fs';
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, Service, Characteristic } from 'homebridge';
@@ -55,6 +59,8 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   public readonly fakegatoAPI: any;
   public readonly eve: any;
   public readonly BLEQue: Mutex = new Mutex();
+  public readonly webhookEventListener: express.Express = express();
+  public readonly webhookEventHandler: Array<{deviceId: string, onWebhook:(context: {[x: string]: any}) => void}> = [];
 
   constructor(public readonly log: Logger, public readonly config: SwitchBotPlatformConfig, public readonly api: API) {
     this.logs();
@@ -105,8 +111,97 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
         this.debugErrorLog(`Failed to Discover, Error: ${e}`);
       }
     });
+
+    this.setupwebhook();
   }
 
+  async setupwebhook() {
+    //webhook configutation
+    if (this.config.options?.webhook) {
+      const port = this.config.options.webhook.port;
+      const url = `http://${this.config.options.webhook.address}:${port}/`;
+
+      // this.webhookEventListener = createServer((request, response) => {
+      // 	request.on('data', (data) => {
+      // 	  this.infoLog(`Request Data: ${data.toString('utf8')}`)
+      // 	  const body = JSON.parse(data)
+      // 	  this.infoLog(`body: ${body}`)
+      // 	  response.end()
+      // 	})
+      // }).listen(this.config.options.webhook.port);
+      // await once(this.webhookEventListener, 'listening')
+
+      this.webhookEventListener.use(express.json());
+      this.webhookEventListener.post('/', (request: express.Request, response: express.Response) => {
+	//this.infoLog(`Received Webhook: ${JSON.stringify(request.body)}`);
+	const handler = this.webhookEventHandler.find(x => x.deviceId === request.body.context.deviceMac);
+	if (handler) {
+	  handler.onWebhook(request.body.context);
+	}
+	response.status(200).send('OK');
+      });
+      this.webhookEventListener.listen(port, () => {
+	this.infoLog(`Webhook receiver listening on port ${port}`);
+      });
+      
+      try {
+	const {body, statusCode, headers} = await request(
+	  'https://api.switch-bot.com/v1.1/webhook/setupWebhook', {
+	    method: 'POST',
+            headers: this.generateHeaders(),
+	    body: JSON.stringify({
+	      'action': 'setupWebhook',
+	      'url': url,
+	      'deviceList': 'ALL',
+	    })
+	  })
+        this.infoLog(`setupWebhook: url:${url}`);
+        this.infoLog(`setupWebhook: body:${JSON.stringify(await body.json())}`);
+        this.infoLog(`setupWebhook: statusCode:${statusCode}`);
+        this.infoLog(`setupWebhook: headers:${JSON.stringify(headers)}`);
+      } catch(e: any) {
+        this.infoLog(`setupWebhook: Error:${e}`);
+      }
+
+      try {
+	const {body, statusCode, headers} = await request(
+	  'https://api.switch-bot.com/v1.1/webhook/updateWebhook', {
+	    method: 'POST',
+            headers: this.generateHeaders(),
+	    body: JSON.stringify({
+	      'action': 'updateWebhook',
+	      'config': {
+		'url': url,
+		'enable': true,
+	      }
+	    })
+	  })
+        this.infoLog(`updateWebhook: url:${url}`);
+        this.infoLog(`updateWebhook: body:${JSON.stringify(await body.json())}`);
+        this.infoLog(`updateWebhook: statusCode:${statusCode}`);
+        this.infoLog(`updateWebhook: headers:${JSON.stringify(headers)}`);
+      } catch(e: any) {
+        this.infoLog(`updateWebhook: Error:${e}`);
+      }
+
+      try {
+	const {body, statusCode, headers} = await request(
+	  'https://api.switch-bot.com/v1.1/webhook/queryWebhook', {
+	    method: 'POST',
+            headers: this.generateHeaders(),
+	    body: JSON.stringify({
+	      'action': 'queryUrl',
+	    })
+	  })
+        this.infoLog(`queryWebhook: body:${JSON.stringify(await body.json())}`);
+        this.infoLog(`queryWebhook: statusCode:${statusCode}`);
+        this.infoLog(`queryWebhook: headers:${JSON.stringify(headers)}`);
+      } catch (e: any) {
+        this.infoLog(`queryWebhook: Error:${e}`);
+      }
+    }
+  }
+  
   /**
    * This function is invoked when homebridge restores cached accessories from disk at startup.
    * It should be used to setup event handlers for characteristics and update respective values.
