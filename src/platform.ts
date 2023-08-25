@@ -30,10 +30,8 @@ import { queueScheduler } from 'rxjs';
 import fakegato from 'fakegato-history';
 import { EveHomeKitTypes } from 'homebridge-lib';
 import { Mutex } from 'await-semaphore';
-// import { createServer } from 'http';
-// import { Client } from 'undici';
-// import { once } from 'events';
-import express from 'express';
+import * as http from 'http';
+//import express from 'express';
 
 import { readFileSync, writeFileSync } from 'fs';
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, Service, Characteristic } from 'homebridge';
@@ -54,11 +52,12 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   version = process.env.npm_package_version || '2.1.1';
   debugMode!: boolean;
   platformLogging?: string;
+  //webhookEventListener: express.Express | null = null;
+  webhookEventListener: http.Server | null = null;
 
   public readonly fakegatoAPI: any;
   public readonly eve: any;
   public readonly BLEQue: Mutex = new Mutex();
-  public readonly webhookEventListener: express.Express = express();
   public readonly webhookEventHandler: Array<{deviceId: string, onWebhook:(context: {[x: string]: any}) => void}> = [];
 
   constructor(
@@ -126,28 +125,39 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
       const port = this.config.options.webhook.port;
       const url = `http://${this.config.options.webhook.address}:${port}/`;
 
-      // this.webhookEventListener = createServer((request, response) => {
-      // 	request.on('data', (data) => {
-      // 	  this.infoLog(`Request Data: ${data.toString('utf8')}`)
-      // 	  const body = JSON.parse(data)
-      // 	  this.infoLog(`body: ${body}`)
-      // 	  response.end()
-      // 	})
-      // }).listen(this.config.options.webhook.port);
-      // await once(this.webhookEventListener, 'listening')
-
-      this.webhookEventListener.use(express.json());
-      this.webhookEventListener.post('/', (request: express.Request, response: express.Response) => {
-	//this.infoLog(`Received Webhook: ${JSON.stringify(request.body)}`);
-	const handler = this.webhookEventHandler.find(x => x.deviceId === request.body.context.deviceMac);
-	if (handler) {
-	  handler.onWebhook(request.body.context);
+      this.webhookEventListener = http.createServer((request: http.IncomingMessage, response: http.ServerResponse) => {
+	try {
+	  //this.infoLog(`Request: ${Object.keys(request.toString())}`)
+	  if (request.method === 'POST') {
+	    request.on('data', (data) => {
+	      const body = JSON.parse(data);
+	      //this.infoLog(`Received Webhook: ${JSON.stringify(body)}`)
+	      const handler = this.webhookEventHandler.find(x => x.deviceId === body.context.deviceMac);
+	      if (handler) {
+		handler.onWebhook(body.context);
+	      }
+	    })
+	  }
+	  response.writeHead(200);
+	  response.end(`Listening switchbot webhook events on port ${port}.`);
+	} catch (e: any) {
+	  this.errorLog('Failed to handle webhook event. Error:${e}');
 	}
-	response.status(200).send('OK');
-      });
-      this.webhookEventListener.listen(port, () => {
-	this.infoLog(`Webhook receiver listening on port ${port}`);
-      });
+      }).listen(this.config.options.webhook.port);
+
+      // this.webhookEventListener = express();
+      // this.webhookEventListener.use(express.json());
+      // this.webhookEventListener.post('/', (request: express.Request, response: express.Response) => {
+      // 	//this.infoLog(`Received Webhook: ${JSON.stringify(request.body)}`);
+      // 	const handler = this.webhookEventHandler.find(x => x.deviceId === request.body.context.deviceMac);
+      // 	if (handler) {
+      // 	  handler.onWebhook(request.body.context);
+      // 	}
+      // 	response.status(200).send('OK');
+      // });
+      // this.webhookEventListener.listen(port, () => {
+      // 	this.infoLog(`Webhook receiver listening on port ${port}`);
+      // });
       
       try {
 	const {body, statusCode, headers} = await request(
