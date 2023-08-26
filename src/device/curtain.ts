@@ -26,7 +26,7 @@ export class Curtain {
 
   // OpenAPI Status
   OpenAPI_InMotion: deviceStatus['moving'];
-  OpenAPI_BatterLevel: deviceStatus['battery'];
+  OpenAPI_BatteryLevel: deviceStatus['battery'];
   OpenAPI_FirmwareRevision: deviceStatus['version'];
   OpenAPI_CurrentPosition: deviceStatus['slidePosition'];
   OpenAPI_CurrentAmbientLightLevel: deviceStatus['brightness'];
@@ -471,6 +471,16 @@ export class Curtain {
       }
       this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} CurrentAmbientLightLevel: ${this.CurrentAmbientLightLevel}`);
     }
+    // Battery
+    this.BatteryLevel = Number(this.OpenAPI_BatteryLevel);
+    if (this.BatteryLevel < 10) {
+      this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW;
+    } else {
+      this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+    }
+    this.debugLog(
+      `${this.device.deviceType}: ${this.accessory.displayName} BatteryLevel: ${this.BatteryLevel},` + ` StatusLowBattery: ${this.StatusLowBattery}`,
+    );
   }
 
   async refreshStatus(): Promise<void> {
@@ -597,7 +607,7 @@ export class Curtain {
         this.OpenAPI_CurrentPosition = deviceStatus.body.slidePosition;
         this.OpenAPI_InMotion = deviceStatus.body.moving;
         this.OpenAPI_CurrentAmbientLightLevel = deviceStatus.body.brightness;
-        this.OpenAPI_BatterLevel = deviceStatus.body.battery;
+        this.OpenAPI_BatteryLevel = deviceStatus.body.battery;
         this.OpenAPI_FirmwareRevision = deviceStatus.body.version;
         this.openAPIparseStatus();
         this.updateHomeKitCharacteristics();
