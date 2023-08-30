@@ -1162,7 +1162,7 @@ export class Curtain {
     } if (accessory.context.FirmwareRevision) {
       this.FirmwareRevision = accessory.context.FirmwareRevision;
     } else {
-      this.FirmwareRevision = this.platform.version;
+      this.FirmwareRevision = JSON.stringify(this.platform.version);
     }
     this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} setFirmwareRevision: ${this.FirmwareRevision}`);
     return this.FirmwareRevision;
@@ -1193,17 +1193,15 @@ export class Curtain {
       }
     }
 
-    if (this.BLE) {
-      if (this.accessory.context.BatteryLevel === undefined) {
-        this.BatteryLevel = 100;
-      } else {
-        this.BatteryLevel = this.accessory.context.BatteryLevel;
-      }
-      if (this.accessory.context.StatusLowBattery === undefined) {
-        this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
-      } else {
-        this.StatusLowBattery = this.accessory.context.StatusLowBattery;
-      }
+    if (this.accessory.context.BatteryLevel === undefined) {
+      this.BatteryLevel = 100;
+    } else {
+      this.BatteryLevel = this.accessory.context.BatteryLevel;
+    }
+    if (this.accessory.context.StatusLowBattery === undefined) {
+      this.StatusLowBattery = this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+    } else {
+      this.StatusLowBattery = this.accessory.context.StatusLowBattery;
     }
 
     if (this.device.history === true) {

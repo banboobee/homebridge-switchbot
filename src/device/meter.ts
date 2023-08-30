@@ -699,7 +699,7 @@ export class Meter {
     } else if (accessory.context.FirmwareRevision) {
       this.FirmwareRevision = accessory.context.FirmwareRevision;
     } else {
-      this.FirmwareRevision = this.platform.version;
+      this.FirmwareRevision = JSON.stringify(this.platform.version);
     }
     this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} setFirmwareRevision: ${this.FirmwareRevision}`);
     return this.FirmwareRevision;
