@@ -214,6 +214,27 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
       } catch (e: any) {
         this.infoLog(`queryWebhook: Error:${e}`);
       }
+
+      this.api.on('shutdown', async () => {
+        //this.infoLog(`setupWebhook: shutting down...`);
+	try {
+	  const {body, statusCode, headers} = await request(
+	    'https://api.switch-bot.com/v1.1/webhook/deleteWebhook', {
+	      method: 'POST',
+              headers: this.generateHeaders(),
+	      body: JSON.stringify({
+		'action': 'deleteWebhook',
+		'url': url,
+	      })
+	    })
+          this.infoLog(`deleteWebhook: url:${url}`);
+          this.infoLog(`deleteWebhook: body:${JSON.stringify(await body.json())}`);
+          this.infoLog(`deleteWebhook: statusCode:${statusCode}`);
+          this.infoLog(`deleteWebhook: headers:${JSON.stringify(headers)}`);
+	} catch (e: any) {
+          this.infoLog(`deleteWebhook: Error:${e}`);
+	}
+      })
     }
   }
   
