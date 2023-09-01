@@ -178,7 +178,15 @@ export class Meter {
 	deviceId: this.device.deviceId,
 	onWebhook: (context) => {
 	  try {
-	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+            if (this.device.mqttURL) {
+	      const mac = this.device.deviceId
+	        ?.toLowerCase()
+		.match(/[\s\S]{1,2}/g)
+	        ?.join(':');
+	      const options = this.device.mqttPubOptions || {};
+	      this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(context)}`, options);
+	    }
+	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	  } catch (e: any) {
 	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	  }
@@ -385,7 +393,7 @@ export class Meter {
             }
 	  } else {
 	    // didn't receive BLE advertisement packets within deviceRefreshRate period.
-            this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus failed to scan. Keeps last values.`);
+            this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus failed to scan. Keeps last values.`);
 	  }
           // Stop to monitor
 	  return await this.stopScanning(switchbot);

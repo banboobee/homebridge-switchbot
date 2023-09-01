@@ -223,6 +223,14 @@ export class Curtain {
 	deviceId: this.device.deviceId,
 	onWebhook: (context) => {
 	  try {
+            if (this.device.mqttURL) {
+	      const mac = this.device.deviceId
+	        ?.toLowerCase()
+		.match(/[\s\S]{1,2}/g)
+	        ?.join(':');
+	      const options = this.device.mqttPubOptions || {};
+	      this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(context)}`, options);
+	    }
 	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    this.CurrentPosition = 100 - context.slidePosition;
 	    this.TargetPosition = this.CurrentPosition
@@ -578,7 +586,7 @@ export class Curtain {
         .then(async () => {
           // Stop to monitor
 	  if (scaned === false) {
-            this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus failed to scan. Keeps last values.`);
+            this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus failed to scan. Keeps last values.`);
 	  }
           return await this.stopScanning(switchbot);
         })
