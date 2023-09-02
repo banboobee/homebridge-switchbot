@@ -232,9 +232,15 @@ export class Curtain {
 	      this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(context)}`, options);
 	    }
 	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
-	    this.CurrentPosition = 100 - context.slidePosition;
-	    this.TargetPosition = this.CurrentPosition
-	    this.updateHomeKitCharacteristics();
+	    if (!this.curtainUpdateInProgress) {
+	      const lastPosition = this.CurrentPosition;
+	      this.CurrentPosition = 100 - context.slidePosition;
+	      this.setMinMax();
+	      if (this.CurrentPosition !== lastPosition) {
+		this.TargetPosition = this.CurrentPosition
+		this.updateHomeKitCharacteristics();
+	      }
+	    }
 	  } catch (e: any) {
 	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	  }
