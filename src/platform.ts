@@ -125,39 +125,44 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
       const port = this.config.options.webhook.port;
       const url = `http://${this.config.options.webhook.address}:${port}/`;
 
-      this.webhookEventListener = http.createServer((request: http.IncomingMessage, response: http.ServerResponse) => {
-	try {
-	  //this.infoLog(`Request: ${Object.keys(request.toString())}`)
-	  if (request.method === 'POST') {
-	    request.on('data', (data) => {
-	      const body = JSON.parse(data);
-	      //this.infoLog(`Received Webhook: ${JSON.stringify(body)}`)
-	      const handler = this.webhookEventHandler.find(x => x.deviceId === body.context.deviceMac);
-	      if (handler) {
-		handler.onWebhook(body.context);
-	      }
-	    })
+      try {
+	this.webhookEventListener = http.createServer((request: http.IncomingMessage, response: http.ServerResponse) => {
+	  try {
+	    //this.infoLog(`Request: ${Object.keys(request.toString())}`)
+	    if (request.method === 'POST') {
+	      request.on('data', (data) => {
+		const body = JSON.parse(data);
+		//this.infoLog(`Received Webhook: ${JSON.stringify(body)}`)
+		const handler = this.webhookEventHandler.find(x => x.deviceId === body.context.deviceMac);
+		if (handler) {
+		  handler.onWebhook(body.context);
+		}
+	      })
+	    }
+	    response.writeHead(200);
+	    response.end(`Listening switchbot webhook events on port ${port}.`);
+	  } catch (e: any) {
+	    this.errorLog('Failed to handle webhook event. Error:${e}');
 	  }
-	  response.writeHead(200);
-	  response.end(`Listening switchbot webhook events on port ${port}.`);
-	} catch (e: any) {
-	  this.errorLog('Failed to handle webhook event. Error:${e}');
-	}
-      }).listen(this.config.options.webhook.port);
-
-      // this.webhookEventListener = express();
-      // this.webhookEventListener.use(express.json());
-      // this.webhookEventListener.post('/', (request: express.Request, response: express.Response) => {
-      // 	//this.infoLog(`Received Webhook: ${JSON.stringify(request.body)}`);
-      // 	const handler = this.webhookEventHandler.find(x => x.deviceId === request.body.context.deviceMac);
-      // 	if (handler) {
-      // 	  handler.onWebhook(request.body.context);
-      // 	}
-      // 	response.status(200).send('OK');
-      // });
-      // this.webhookEventListener.listen(port, () => {
-      // 	this.infoLog(`Webhook receiver listening on port ${port}`);
-      // });
+	}).listen(this.config.options.webhook.port);
+	
+	// this.webhookEventListener = express();
+	// this.webhookEventListener.use(express.json());
+	// this.webhookEventListener.post('/', (request: express.Request, response: express.Response) => {
+	// 	//this.infoLog(`Received Webhook: ${JSON.stringify(request.body)}`);
+	// 	const handler = this.webhookEventHandler.find(x => x.deviceId === request.body.context.deviceMac);
+	// 	if (handler) {
+	// 	  handler.onWebhook(request.body.context);
+	// 	}
+	// 	response.status(200).send('OK');
+	// });
+	// this.webhookEventListener.listen(port, () => {
+	// 	this.infoLog(`Webhook receiver listening on port ${port}`);
+	// });
+      } catch (e: any) {
+	this.errorLog('Failed to create webhook listener. Error:${e.message}');
+	return;
+      }
       
       try {
 	const {body, statusCode, headers} = await request(
@@ -170,12 +175,16 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	      'deviceList': 'ALL',
 	    })
 	  })
-        this.infoLog(`setupWebhook: url:${url}`);
-        this.infoLog(`setupWebhook: body:${JSON.stringify(await body.json())}`);
-        this.infoLog(`setupWebhook: statusCode:${statusCode}`);
-        this.infoLog(`setupWebhook: headers:${JSON.stringify(headers)}`);
+	const response: any = await body.json();
+        this.debugLog(`setupWebhook: url:${url}`);
+        this.debugLog(`setupWebhook: body:${JSON.stringify(response)}`);
+        this.debugLog(`setupWebhook: statusCode:${statusCode}`);
+        this.debugLog(`setupWebhook: headers:${JSON.stringify(headers)}`);
+	if (statusCode !== 200 || response?.statusCode !== 100) {
+          this.errorLog(`Failed to configure webhook. Existing URL well be overridden. HTTP:${statusCode} statusCode:${response?.statusCode} message:${response?.message}`);
+	}
       } catch(e: any) {
-        this.infoLog(`setupWebhook: Error:${e}`);
+        this.errorLog(`Failed to configure webhook. Error: ${e.message}`);
       }
 
       try {
@@ -191,12 +200,16 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	      }
 	    })
 	  })
-        this.infoLog(`updateWebhook: url:${url}`);
-        this.infoLog(`updateWebhook: body:${JSON.stringify(await body.json())}`);
-        this.infoLog(`updateWebhook: statusCode:${statusCode}`);
-        this.infoLog(`updateWebhook: headers:${JSON.stringify(headers)}`);
+	const response: any = await body.json();
+        this.debugLog(`updateWebhook: url:${url}`);
+        this.debugLog(`updateWebhook: body:${JSON.stringify(response)}`);
+        this.debugLog(`updateWebhook: statusCode:${statusCode}`);
+        this.debugLog(`updateWebhook: headers:${JSON.stringify(headers)}`);
+	if (statusCode !== 200 || response?.statusCode !== 100) {
+          this.errorLog(`Failed to update webhook. HTTP:${statusCode} statusCode:${response?.statusCode} message:${response?.message}`);
+	}
       } catch(e: any) {
-        this.infoLog(`updateWebhook: Error:${e}`);
+        this.errorLog(`Failed to update webhook. Error:${e.message}`);
       }
 
       try {
@@ -208,15 +221,21 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	      'action': 'queryUrl',
 	    })
 	  })
-        this.infoLog(`queryWebhook: body:${JSON.stringify(await body.json())}`);
-        this.infoLog(`queryWebhook: statusCode:${statusCode}`);
-        this.infoLog(`queryWebhook: headers:${JSON.stringify(headers)}`);
+	const response: any = await body.json();
+        this.debugLog(`queryWebhook: body:${JSON.stringify(response)}`);
+        this.debugLog(`queryWebhook: statusCode:${statusCode}`);
+        this.debugLog(`queryWebhook: headers:${JSON.stringify(headers)}`);
+	if (statusCode !== 200 || response?.statusCode !== 100) {
+          this.errorLog(`Failed to query webhook. HTTP:${statusCode} statusCode:${response?.statusCode} message:${response?.message}`);
+	} else {
+          this.infoLog(`Listening webhook events on ${response?.body?.urls[0]}`);
+	}
       } catch (e: any) {
-        this.infoLog(`queryWebhook: Error:${e}`);
+        this.errorLog(`Failed to query webhook. Error:${e}`);
       }
 
       this.api.on('shutdown', async () => {
-        //this.infoLog(`setupWebhook: shutting down...`);
+        //this.debugLog(`setupWebhook: shutting down...`);
 	try {
 	  const {body, statusCode, headers} = await request(
 	    'https://api.switch-bot.com/v1.1/webhook/deleteWebhook', {
@@ -227,12 +246,18 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 		'url': url,
 	      })
 	    })
-          this.infoLog(`deleteWebhook: url:${url}`);
-          this.infoLog(`deleteWebhook: body:${JSON.stringify(await body.json())}`);
-          this.infoLog(`deleteWebhook: statusCode:${statusCode}`);
-          this.infoLog(`deleteWebhook: headers:${JSON.stringify(headers)}`);
+	  const response: any = await body.json();
+          this.debugLog(`deleteWebhook: url:${url}`);
+          this.debugLog(`deleteWebhook: body:${JSON.stringify(response)}`);
+          this.debugLog(`deleteWebhook: statusCode:${statusCode}`);
+          this.debugLog(`deleteWebhook: headers:${JSON.stringify(headers)}`);
+	  if (statusCode !== 200 || response?.statusCode !== 100) {
+            this.errorLog(`Failed to delete webhook. HTTP:${statusCode} statusCode:${response?.statusCode} message:${response?.message}`);
+	  } else {
+            this.infoLog(`Unregistered webhook URL to finish listening.`);
+	  }
 	} catch (e: any) {
-          this.infoLog(`deleteWebhook: Error:${e}`);
+          this.errorLog(`Failed to delete webhook. Error:${e.message}`);
 	}
       })
     }
