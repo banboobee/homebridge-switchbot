@@ -36,6 +36,9 @@ export type options = {
   devices?: Array<devicesConfig>;
   irdevices?: Array<irDevicesConfig>;
   webhook?: {address: string, port: number};
+  mqttURL?: string;
+  mqttOptions?: IClientOptions;
+  mqttPubOptions?: IClientOptions;
 };
 
 export interface devicesConfig extends device {

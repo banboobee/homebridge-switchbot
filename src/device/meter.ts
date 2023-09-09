@@ -178,14 +178,6 @@ export class Meter {
 	deviceId: this.device.deviceId,
 	onWebhook: (context) => {
 	  try {
-            if (this.device.mqttURL) {
-	      const mac = this.device.deviceId
-	        ?.toLowerCase()
-		.match(/[\s\S]{1,2}/g)
-	        ?.join(':');
-	      const options = this.device.mqttPubOptions || {};
-	      this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(context)}`, options);
-	    }
 	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    if (context.scale === 'CELSIUS') {
 		this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} ` +

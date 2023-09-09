@@ -30,6 +30,8 @@ import { queueScheduler } from 'rxjs';
 import fakegato from 'fakegato-history';
 import { EveHomeKitTypes } from 'homebridge-lib';
 import { Mutex } from 'await-semaphore';
+import { MqttClient } from 'mqtt';
+import { connectAsync } from 'async-mqtt';
 import * as http from 'http';
 //import express from 'express';
 
@@ -54,6 +56,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   platformLogging?: string;
   //webhookEventListener: express.Express | null = null;
   webhookEventListener: http.Server | null = null;
+  mqttClient: MqttClient | null = null;
 
   public readonly fakegatoAPI: any;
   public readonly eve: any;
@@ -116,7 +119,23 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
       }
     });
 
+    this.setupMqtt();
     this.setupwebhook();
+  }
+
+  async setupMqtt(): Promise<void> {
+    if (this.config.options?.mqttURL) {
+      try {
+        this.mqttClient = await connectAsync(this.config.options?.mqttURL, this.config.options.mqttOptions || {});
+        this.debugLog(`MQTT connection has been established successfully.`);
+        this.mqttClient.on('error', (e: Error) => {
+          this.errorLog(`Failed to publish MQTT messages. ${e}`);
+        });
+      } catch (e) {
+        this.mqttClient = null;
+        this.errorLog(`Failed to establish MQTT connection. ${e}`);
+      }
+    }
   }
 
   async setupwebhook() {
@@ -133,6 +152,14 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	      request.on('data', (data) => {
 		const body = JSON.parse(data);
 		//this.infoLog(`Received Webhook: ${JSON.stringify(body)}`)
+		if (this.config.options?.mqttURL) {
+		  const mac = body.context.deviceMac
+	            ?.toLowerCase()
+		    .match(/[\s\S]{1,2}/g)
+	            ?.join(':');
+		  const options = this.config.options?.mqttPubOptions || {};
+		  this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(body.context)}`, options);
+		}
 		const handler = this.webhookEventHandler.find(x => x.deviceId === body.context.deviceMac);
 		if (handler) {
 		  handler.onWebhook(body.context);
@@ -181,7 +208,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
         this.debugLog(`setupWebhook: statusCode:${statusCode}`);
         this.debugLog(`setupWebhook: headers:${JSON.stringify(headers)}`);
 	if (statusCode !== 200 || response?.statusCode !== 100) {
-          this.errorLog(`Failed to configure webhook. Existing URL well be overridden. HTTP:${statusCode} statusCode:${response?.statusCode} message:${response?.message}`);
+          this.errorLog(`Failed to configure webhook. Existing webhook well be overridden. HTTP:${statusCode} API:${response?.statusCode} message:${response?.message}`);
 	}
       } catch(e: any) {
         this.errorLog(`Failed to configure webhook. Error: ${e.message}`);
@@ -206,7 +233,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
         this.debugLog(`updateWebhook: statusCode:${statusCode}`);
         this.debugLog(`updateWebhook: headers:${JSON.stringify(headers)}`);
 	if (statusCode !== 200 || response?.statusCode !== 100) {
-          this.errorLog(`Failed to update webhook. HTTP:${statusCode} statusCode:${response?.statusCode} message:${response?.message}`);
+          this.errorLog(`Failed to update webhook. HTTP:${statusCode} API:${response?.statusCode} message:${response?.message}`);
 	}
       } catch(e: any) {
         this.errorLog(`Failed to update webhook. Error:${e.message}`);
@@ -226,7 +253,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
         this.debugLog(`queryWebhook: statusCode:${statusCode}`);
         this.debugLog(`queryWebhook: headers:${JSON.stringify(headers)}`);
 	if (statusCode !== 200 || response?.statusCode !== 100) {
-          this.errorLog(`Failed to query webhook. HTTP:${statusCode} statusCode:${response?.statusCode} message:${response?.message}`);
+          this.errorLog(`Failed to query webhook. HTTP:${statusCode} API:${response?.statusCode} message:${response?.message}`);
 	} else {
           this.infoLog(`Listening webhook events on ${response?.body?.urls[0]}`);
 	}
@@ -252,9 +279,9 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
           this.debugLog(`deleteWebhook: statusCode:${statusCode}`);
           this.debugLog(`deleteWebhook: headers:${JSON.stringify(headers)}`);
 	  if (statusCode !== 200 || response?.statusCode !== 100) {
-            this.errorLog(`Failed to delete webhook. HTTP:${statusCode} statusCode:${response?.statusCode} message:${response?.message}`);
+            this.errorLog(`Failed to delete webhook. HTTP:${statusCode} API:${response?.statusCode} message:${response?.message}`);
 	  } else {
-            this.infoLog(`Unregistered webhook URL to finish listening.`);
+            this.infoLog(`Unregistered webhook to finish listening.`);
 	  }
 	} catch (e: any) {
           this.errorLog(`Failed to delete webhook. Error:${e.message}`);
