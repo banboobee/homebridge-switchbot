@@ -51,7 +51,7 @@ export class Curtain {
   setNewTarget!: boolean;
   setNewTargetTimer!: NodeJS.Timeout;
 
-  //MQTT stuff
+  //MQTT
   mqttClient: MqttClient | null = null;
 
   // Config
@@ -75,6 +75,9 @@ export class Curtain {
 
   // EVE history service handler
   historyService: any = null;
+
+  // Webhook 
+  lastWebhookEvent: {[x: string]: any} = {};
 
   constructor(
     private readonly platform: SwitchBotPlatform,
@@ -232,10 +235,15 @@ export class Curtain {
 	      this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(context)}`, options);
 	    }
 	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+	    if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
+	      return;
+	    }
+	    this.lastWebhookEvent = {...context};
 	    if (!this.curtainUpdateInProgress) {
 	      const lastPosition = this.CurrentPosition;
 	      this.CurrentPosition = 100 - context.slidePosition;
 	      this.setMinMax();
+	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} Webhook:${100 - context.slidePosition}, LastPosition: ${lastPosition}, CurrentPosition: ${this.CurrentPosition}`);
 	      if (this.CurrentPosition !== lastPosition) {
 		this.TargetPosition = this.CurrentPosition
 		this.updateHomeKitCharacteristics();
