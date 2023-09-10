@@ -33,7 +33,6 @@ import { Mutex } from 'await-semaphore';
 import { MqttClient } from 'mqtt';
 import { connectAsync } from 'async-mqtt';
 import * as http from 'http';
-//import express from 'express';
 
 import { readFileSync, writeFileSync } from 'fs';
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, Service, Characteristic } from 'homebridge';
@@ -54,7 +53,6 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   version = process.env.npm_package_version || '2.1.1';
   debugMode!: boolean;
   platformLogging?: string;
-  //webhookEventListener: express.Express | null = null;
   webhookEventListener: http.Server | null = null;
   mqttClient: MqttClient | null = null;
 
@@ -140,15 +138,16 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 
   async setupwebhook() {
     //webhook configutation
-    if (this.config.options?.webhook) {
-      const port = this.config.options.webhook.port;
-      const url = `http://${this.config.options.webhook.address}:${port}/`;
+    if (this.config.options?.webhookURL) {
+      const url = this.config.options?.webhookURL;
 
       try {
+	const xurl = new URL(url);
+	const port = Number(xurl.port);
+	const path = xurl.pathname;
 	this.webhookEventListener = http.createServer((request: http.IncomingMessage, response: http.ServerResponse) => {
 	  try {
-	    //this.infoLog(`Request: ${Object.keys(request.toString())}`)
-	    if (request.method === 'POST') {
+	    if (request.url === path && request.method === 'POST') {
 	      request.on('data', (data) => {
 		const body = JSON.parse(data);
 		//this.infoLog(`Received Webhook: ${JSON.stringify(body)}`)
@@ -165,29 +164,15 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 		  handler.onWebhook(body.context);
 		}
 	      })
+	      response.writeHead(200, {'Content-Type': 'text/plain'});
+	      response.end(`OK`);
 	    }
-	    response.writeHead(200);
-	    response.end(`Listening switchbot webhook events on port ${port}.`);
 	  } catch (e: any) {
-	    this.errorLog('Failed to handle webhook event. Error:${e}');
+	    this.errorLog(`Failed to handle webhook event. Error:${e}`);
 	  }
-	}).listen(this.config.options.webhook.port);
-	
-	// this.webhookEventListener = express();
-	// this.webhookEventListener.use(express.json());
-	// this.webhookEventListener.post('/', (request: express.Request, response: express.Response) => {
-	// 	//this.infoLog(`Received Webhook: ${JSON.stringify(request.body)}`);
-	// 	const handler = this.webhookEventHandler.find(x => x.deviceId === request.body.context.deviceMac);
-	// 	if (handler) {
-	// 	  handler.onWebhook(request.body.context);
-	// 	}
-	// 	response.status(200).send('OK');
-	// });
-	// this.webhookEventListener.listen(port, () => {
-	// 	this.infoLog(`Webhook receiver listening on port ${port}`);
-	// });
+	}).listen(port ? port : 8080);
       } catch (e: any) {
-	this.errorLog('Failed to create webhook listener. Error:${e.message}');
+	this.errorLog(`Failed to create webhook listener. Error:${e.message}`);
 	return;
       }
       
@@ -262,7 +247,6 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
       }
 
       this.api.on('shutdown', async () => {
-        //this.debugLog(`setupWebhook: shutting down...`);
 	try {
 	  const {body, statusCode, headers} = await request(
 	    'https://api.switch-bot.com/v1.1/webhook/deleteWebhook', {

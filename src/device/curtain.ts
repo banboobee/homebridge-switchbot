@@ -226,7 +226,7 @@ export class Curtain {
 	deviceId: this.device.deviceId,
 	onWebhook: (context) => {
 	  try {
-	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
 	      return;
 	    }
@@ -235,7 +235,7 @@ export class Curtain {
 	      const lastPosition = this.CurrentPosition;
 	      this.CurrentPosition = 100 - context.slidePosition;
 	      this.setMinMax();
-	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} Webhook:${100 - context.slidePosition}, LastPosition: ${lastPosition}, CurrentPosition: ${this.CurrentPosition}`);
+	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position. Webhook:${100 - context.slidePosition}, Last: ${lastPosition}, Current: ${this.CurrentPosition}`);
 	      if (this.CurrentPosition !== lastPosition) {
 		this.TargetPosition = this.CurrentPosition
 		this.updateHomeKitCharacteristics();

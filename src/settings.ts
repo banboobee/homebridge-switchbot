@@ -35,7 +35,7 @@ export type options = {
   logging?: string;
   devices?: Array<devicesConfig>;
   irdevices?: Array<irDevicesConfig>;
-  webhook?: {address: string, port: number};
+  webhookURL?: string;
   mqttURL?: string;
   mqttOptions?: IClientOptions;
   mqttPubOptions?: IClientOptions;
