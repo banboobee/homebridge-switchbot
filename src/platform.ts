@@ -170,7 +170,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	  } catch (e: any) {
 	    this.errorLog(`Failed to handle webhook event. Error:${e}`);
 	  }
-	}).listen(port ? port : 8080);
+	}).listen(port ? port : 80);
       } catch (e: any) {
 	this.errorLog(`Failed to create webhook listener. Error:${e.message}`);
 	return;
