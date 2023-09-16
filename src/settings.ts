@@ -170,6 +170,7 @@ export interface irDevicesConfig extends irdevice {
   customOn?: string;
   customOff?: string;
   customize?: boolean;
+  commandType?: string;
   disablePushOn?: boolean;
   disablePushOff?: boolean;
   disablePushDetail?: boolean;
