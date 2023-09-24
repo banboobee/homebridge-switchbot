@@ -129,6 +129,15 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
         this.mqttClient.on('error', (e: Error) => {
           this.errorLog(`Failed to publish MQTT messages. ${e}`);
         });
+	if (!this.config.options?.webhookURL) {
+	  // receive webhook events via MQTT
+	  this.mqttClient.subscribe(`homebridge-switchbot/webhook/+`);
+	  this.mqttClient.on('message', (topic: string, message) => {
+	    this.debugLog(`Received Webhook via MQTT: ${topic}=${message}`)
+	    const context = JSON.parse(message.toString());
+	    this.webhookEventHandler.find(x => x.deviceId === context.deviceMac)?.onWebhook(context);
+	  })
+	}
       } catch (e) {
         this.mqttClient = null;
         this.errorLog(`Failed to establish MQTT connection. ${e}`);
