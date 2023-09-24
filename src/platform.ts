@@ -150,7 +150,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	    if (request.url === path && request.method === 'POST') {
 	      request.on('data', (data) => {
 		const body = JSON.parse(data);
-		//this.infoLog(`Received Webhook: ${JSON.stringify(body)}`)
+		this.debugLog(`Received Webhook: ${JSON.stringify(body)}`)
 		if (this.config.options?.mqttURL) {
 		  const mac = body.context.deviceMac
 	            ?.toLowerCase()
@@ -159,14 +159,15 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 		  const options = this.config.options?.mqttPubOptions || {};
 		  this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(body.context)}`, options);
 		}
-		const handler = this.webhookEventHandler.find(x => x.deviceId === body.context.deviceMac);
-		if (handler) {
-		  handler.onWebhook(body.context);
-		}
+		this.webhookEventHandler.find(x => x.deviceId === body.context.deviceMac)?.onWebhook(body.context);
 	      })
 	      response.writeHead(200, {'Content-Type': 'text/plain'});
 	      response.end(`OK`);
 	    }
+	    // else {
+	    //   response.writeHead(403, {'Content-Type': 'text/plain'});
+	    //   response.end(`NG`);
+	    // }
 	  } catch (e: any) {
 	    this.errorLog(`Failed to handle webhook event. Error:${e}`);
 	  }
@@ -240,7 +241,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	if (statusCode !== 200 || response?.statusCode !== 100) {
           this.errorLog(`Failed to query webhook. HTTP:${statusCode} API:${response?.statusCode} message:${response?.message}`);
 	} else {
-          this.infoLog(`Listening webhook events on ${response?.body?.urls[0]}`);
+          this.infoLog(`Listening webhook on ${response?.body?.urls[0]}`);
 	}
       } catch (e: any) {
         this.errorLog(`Failed to query webhook. Error:${e}`);
@@ -265,7 +266,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	  if (statusCode !== 200 || response?.statusCode !== 100) {
             this.errorLog(`Failed to delete webhook. HTTP:${statusCode} API:${response?.statusCode} message:${response?.message}`);
 	  } else {
-            this.infoLog(`Unregistered webhook to finish listening.`);
+            this.infoLog(`Unregistered webhook to close listening.`);
 	  }
 	} catch (e: any) {
           this.errorLog(`Failed to delete webhook. Error:${e.message}`);
