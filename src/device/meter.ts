@@ -176,7 +176,7 @@ export class Meter {
     if (this.device.enableWebhook) {
       this.platform.webhookEventHandler.push({
 	deviceId: this.device.deviceId,
-	onWebhook: (context) => {
+	onWebhook: async (context) => {
 	  try {
 	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    if (context.scale === 'CELSIUS') {
