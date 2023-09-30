@@ -59,7 +59,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   public readonly fakegatoAPI: any;
   public readonly eve: any;
   public readonly BLEQue: Mutex = new Mutex();
-  public readonly webhookEventHandler: Array<{deviceId: string | undefined, onWebhook:(context: {[x: string]: any}) => void}> = [];
+  public readonly webhookEventHandler: {[x: string]: (context: {[x: string]: any}) => void} = {};
 
   constructor(
     public readonly log: Logger,
@@ -131,11 +131,12 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
         });
 	if (!this.config.options?.webhookURL) {
 	  // receive webhook events via MQTT
+          this.infoLog(`Webhook is configured to be received through MQTT.`);
 	  this.mqttClient.subscribe(`homebridge-switchbot/webhook/+`);
 	  this.mqttClient.on('message', async (topic: string, message) => {
 	    this.debugLog(`Received Webhook via MQTT: ${topic}=${message}`)
 	    const context = JSON.parse(message.toString());
-	    await this.webhookEventHandler.find(x => x.deviceId === context.deviceMac)?.onWebhook(context);
+	    await this.webhookEventHandler[context.deviceMac]?.(context);
 	  })
 	}
       } catch (e) {
@@ -168,7 +169,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 		  const options = this.config.options?.mqttPubOptions || {};
 		  this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(body.context)}`, options);
 		}
-		await this.webhookEventHandler.find(x => x.deviceId === body.context.deviceMac)?.onWebhook(body.context);
+		await this.webhookEventHandler[body.context.deviceMac]?.(body.context);
 	      })
 	      response.writeHead(200, {'Content-Type': 'text/plain'});
 	      response.end(`OK`);

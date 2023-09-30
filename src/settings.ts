@@ -60,7 +60,7 @@ export interface devicesConfig extends device {
   mqttOptions?: IClientOptions;
   mqttPubOptions?: IClientOptions;
   history?: boolean;
-  enableWebhook?: boolean;
+  webhook?: boolean;
   bot?: bot;
   meter?: meter;
   humidifier?: humidifier;

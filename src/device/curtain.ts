@@ -222,73 +222,73 @@ export class Curtain {
       });
 
     //regisiter webhook event handler
-    if (this.device.enableWebhook) {
-      this.platform.webhookEventHandler.push({
-	deviceId: this.device.deviceId,
-	onWebhook: async (context) => {
+    if (this.device.webhook) {
+      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} is listening webhook.`);
+      this.platform.webhookEventHandler[this.device.deviceId] = async (context) => {
+	try {
+	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+	  if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
+	    return;
+	  }
+	  this.lastWebhookEvent = {...context};
+	  if (!this.setNewTarget) {
+	    const lastPosition: number = Number(this.CurrentPosition);
+	    this.CurrentPosition = 100 - context.slidePosition;
+	    await this.setMinMax();
+	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook:${100 - context.slidePosition}, Current: ${lastPosition}, Update: ${this.CurrentPosition}.`);
+	    if (this.CurrentPosition !== lastPosition) {
+	      if (!this.Webhook_InMotion) {
+		//this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to MOVING.`);
+		this.Webhook_InMotion = true;
+	      }
+	      if (Number(this.CurrentPosition) > lastPosition) {
+		this.TargetPosition = Math.min(this.CurrentPosition + 10, 100);
+		this.PositionState = platform.Characteristic.PositionState.INCREASING;
+		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to INCREASING.`);
+	      } else {
+		this.TargetPosition = Math.max(this.CurrentPosition - 10, 0);
+		this.PositionState = platform.Characteristic.PositionState.DECREASING;
+		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to DECREASING.`);
+	      }
+	      this.updateHomeKitCharacteristics();
+	      
+	      const timeout = 5;
+	      clearTimeout(this.setNewTargetTimer);
+	      this.setNewTargetTimer = setTimeout(() => {
+		this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+		this.updateHomeKitCharacteristics();
+		this.Webhook_InMotion = false;
+		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
+	      }, timeout * 1000);
+	    }
+	  }
+	} catch (e: any) {
+	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
+	}
+      }
+      // register grouped curtain to track moving
+      if (this.device.group && !this.device.curtain?.disable_group) {
+	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = async (context) => {
 	  try {
 	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
 	      return;
 	    }
 	    this.lastWebhookEvent = {...context};
-	    if (!this.setNewTarget) {
-	      const lastPosition: number = Number(this.CurrentPosition);
-	      this.CurrentPosition = 100 - context.slidePosition;
-	      await this.setMinMax();
-	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook:${100 - context.slidePosition}, Current: ${lastPosition}, Update: ${this.CurrentPosition}.`);
-	      if (this.CurrentPosition !== lastPosition) {
-		if (!this.Webhook_InMotion) {
-		  this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to MOVING.`);
-		  this.Webhook_InMotion = true;
-		}
-		this.TargetPosition = this.CurrentPosition;
-		this.PositionState = Number(this.CurrentPosition) > lastPosition ?
-		  this.platform.Characteristic.PositionState.INCREASING :
-		  this.platform.Characteristic.PositionState.DECREASING
+	    if (!this.setNewTarget && this.Webhook_InMotion) {
+	      const timeout = 5;
+	      clearTimeout(this.setNewTargetTimer);
+	      this.setNewTargetTimer = setTimeout(() => {
+		this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
 		this.updateHomeKitCharacteristics();
-		
-		const timeout = 5;
-		clearTimeout(this.setNewTargetTimer);
-		this.setNewTargetTimer = setTimeout(() => {
-		  this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
-		  this.updateHomeKitCharacteristics();
-		  this.Webhook_InMotion = false;
-		  this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
-		}, timeout * 1000);
-	      }
+		this.Webhook_InMotion = false;
+		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
+	      }, timeout * 1000);
 	    }
 	  } catch (e: any) {
 	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	  }
 	}
-      })
-      // register grouped curtain to track moving
-      if (this.device.group && !this.device.curtain?.disable_group) {
-	this.platform.webhookEventHandler.push({
-	  deviceId: this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId),
-	  onWebhook: async (context) => {
-	    try {
-	      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
-	      if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
-		return;
-	      }
-	      this.lastWebhookEvent = {...context};
-	      if (!this.setNewTarget && this.Webhook_InMotion) {
-		const timeout = 5;
-		clearTimeout(this.setNewTargetTimer);
-		this.setNewTargetTimer = setTimeout(() => {
-		  this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
-		  this.updateHomeKitCharacteristics();
-		  this.Webhook_InMotion = false;
-		  this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
-		}, timeout * 1000);
-	      }
-	    } catch (e: any) {
-	      this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
-	    }
-	  }
-	})
       }
     }
     // Setup EVE history features

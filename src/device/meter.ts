@@ -173,26 +173,24 @@ export class Meter {
       });
 
     //regisiter webhook event handler
-    if (this.device.enableWebhook) {
-      this.platform.webhookEventHandler.push({
-	deviceId: this.device.deviceId,
-	onWebhook: async (context) => {
-	  try {
-	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
-	    if (context.scale === 'CELSIUS') {
-		this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} ` +
-			      `(temperature, humidity) = ` +
-			      `Webhook:(${context.temperature}, ${context.humidity}), ` +
-			      `current:(${this.CurrentTemperature}, ${this.CurrentRelativeHumidity})`);
-	      this.CurrentRelativeHumidity = context.humidity;
-	      this.CurrentTemperature = context.temperature;
-	      this.updateHomeKitCharacteristics();
-	    }
-	  } catch (e: any) {
-	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
+    if (this.device.webhook) {
+      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} is listening webhook.`);
+      this.platform.webhookEventHandler[this.device.deviceId] = async (context) => {
+	try {
+	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+	  if (context.scale === 'CELSIUS') {
+	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} ` +
+			  `(temperature, humidity) = ` +
+			  `Webhook:(${context.temperature}, ${context.humidity}), ` +
+			  `current:(${this.CurrentTemperature}, ${this.CurrentRelativeHumidity})`);
+	    this.CurrentRelativeHumidity = context.humidity;
+	    this.CurrentTemperature = context.temperature;
+	    this.updateHomeKitCharacteristics();
 	  }
+	} catch (e: any) {
+	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	}
-      })
+      }
     }
   }
 
