@@ -9,6 +9,7 @@ import { debounceTime, skipWhile, take, tap } from 'rxjs/operators';
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicChange } from 'homebridge';
 import { device, devicesConfig, serviceData, deviceStatus, ad, Devices } from '../settings';
 import { hostname } from 'os';
+import { Mutex } from 'await-semaphore';
 
 export class Curtain {
   // Services
@@ -224,7 +225,7 @@ export class Curtain {
     //regisiter webhook event handler
     if (this.device.webhook) {
       this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} is listening webhook.`);
-      this.platform.webhookEventHandler[this.device.deviceId] = async (context) => {
+      this.platform.webhookEventHandler[this.device.deviceId] =	(async (context) => {this.WebhookQue.use(async () => {
 	try {
 	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	  if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
@@ -232,43 +233,36 @@ export class Curtain {
 	  }
 	  this.lastWebhookEvent = {...context};
 	  if (!this.setNewTarget) {
-	    const lastPosition: number = Number(this.CurrentPosition);
-	    this.CurrentPosition = 100 - context.slidePosition;
-	    await this.setMinMax();
-	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook:${100 - context.slidePosition}, Current: ${lastPosition}, Update: ${this.CurrentPosition}.`);
-	    if (this.CurrentPosition !== lastPosition) {
-	      if (!this.Webhook_InMotion) {
-		//this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to MOVING.`);
-		this.Webhook_InMotion = true;
-	      }
-	      if (Number(this.CurrentPosition) > lastPosition) {
-		this.TargetPosition = Math.min(this.CurrentPosition + 10, 100);
-		this.PositionState = platform.Characteristic.PositionState.INCREASING;
-		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to INCREASING.`);
-	      } else {
-		this.TargetPosition = Math.max(this.CurrentPosition - 10, 0);
-		this.PositionState = platform.Characteristic.PositionState.DECREASING;
-		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to DECREASING.`);
-	      }
-	      this.updateHomeKitCharacteristics();
-	      
-	      const timeout = 5;
-	      clearTimeout(this.setNewTargetTimer);
-	      this.setNewTargetTimer = setTimeout(() => {
-		this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
-		this.updateHomeKitCharacteristics();
-		this.Webhook_InMotion = false;
-		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
-	      }, timeout * 1000);
+	    if (!this.Webhook_InMotion) {
+	      this.Webhook_InMotion = true;
+	      this.TargetPosition = Number(this.CurrentPosition) > 50 ? 0 : 100;
+	      await this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.TargetPosition, Number(this.TargetPosition));
+	      this.PositionState = Number(this.CurrentPosition) > 50 ?
+		this.platform.Characteristic.PositionState.DECREASING :
+		this.platform.Characteristic.PositionState.INCREASING;
+	      await this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.PositionState, this.PositionState);
 	    }
+	    const currentPosition = this.CurrentPosition;
+	    this.CurrentPosition = 100 - context.slidePosition;
+	    await this.updateHomeKitCharacteristics();
+	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook: ${this.TargetPosition}, Current: ${currentPosition} Update: ${this.CurrentPosition}.`);
+	    
+	    const timeout = 5;
+	    await clearTimeout(this.setNewTargetTimer);
+	    this.setNewTargetTimer = await setTimeout(async () => {
+	      this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
+	      await this.updateHomeKitCharacteristics();
+	      this.Webhook_InMotion = false;
+	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
+	    }, timeout * 1000);
 	  }
 	} catch (e: any) {
 	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	}
-      }
+      })})
       // register grouped curtain to track moving
       if (this.device.group && !this.device.curtain?.disable_group) {
-	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = async (context) => {
+	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = (async (context) => {this.WebhookQue.use(async () => {
 	  try {
 	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
@@ -277,10 +271,10 @@ export class Curtain {
 	    this.lastWebhookEvent = {...context};
 	    if (!this.setNewTarget && this.Webhook_InMotion) {
 	      const timeout = 5;
-	      clearTimeout(this.setNewTargetTimer);
-	      this.setNewTargetTimer = setTimeout(() => {
+	      await clearTimeout(this.setNewTargetTimer);
+	      this.setNewTargetTimer = await setTimeout(async () => {
 		this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
-		this.updateHomeKitCharacteristics();
+		await this.updateHomeKitCharacteristics();
 		this.Webhook_InMotion = false;
 		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
 	      }, timeout * 1000);
@@ -288,7 +282,7 @@ export class Curtain {
 	  } catch (e: any) {
 	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	  }
-	}
+	})})
       }
     }
     // Setup EVE history features
@@ -895,17 +889,15 @@ export class Curtain {
 
   async updateHomeKitCharacteristics(): Promise<void> {
     await this.setMinMax();
-    // Update Target, PositionState, Current in this order
-    // especially for the cases of simultaneous changing.
-    if (this.TargetPosition === undefined || Number.isNaN(this.TargetPosition)) {
-      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} TargetPosition: ${this.TargetPosition}`);
+    if (this.CurrentPosition === undefined || Number.isNaN(this.CurrentPosition)) {
+      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} CurrentPosition: ${this.CurrentPosition}`);
     } else {
       if (this.device.mqttURL) {
-        this.mqttPublish('TargetPosition', this.TargetPosition);
+        this.mqttPublish('CurrentPosition', this.CurrentPosition);
       }
-      this.accessory.context.TargetPosition = this.TargetPosition;
-      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.TargetPosition, Number(this.TargetPosition));
-      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} updateCharacteristic TargetPosition: ${this.TargetPosition}`);
+      this.accessory.context.CurrentPosition = this.CurrentPosition;
+      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.CurrentPosition, Number(this.CurrentPosition));
+      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} updateCharacteristic CurrentPosition: ${this.CurrentPosition}`);
     }
     if (this.PositionState === undefined) {
       this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} PositionState: ${this.PositionState}`);
@@ -917,15 +909,15 @@ export class Curtain {
       this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.PositionState, Number(this.PositionState));
       this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} updateCharacteristic PositionState: ${this.PositionState}`);
     }
-    if (this.CurrentPosition === undefined || Number.isNaN(this.CurrentPosition)) {
-      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} CurrentPosition: ${this.CurrentPosition}`);
+    if (this.TargetPosition === undefined || Number.isNaN(this.TargetPosition)) {
+      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} TargetPosition: ${this.TargetPosition}`);
     } else {
       if (this.device.mqttURL) {
-        this.mqttPublish('CurrentPosition', this.CurrentPosition);
+        this.mqttPublish('TargetPosition', this.TargetPosition);
       }
-      this.accessory.context.CurrentPosition = this.CurrentPosition;
-      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.CurrentPosition, Number(this.CurrentPosition));
-      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} updateCharacteristic CurrentPosition: ${this.CurrentPosition}`);
+      this.accessory.context.TargetPosition = this.TargetPosition;
+      this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.TargetPosition, Number(this.TargetPosition));
+      this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} updateCharacteristic TargetPosition: ${this.TargetPosition}`);
     }
     if (!this.device.curtain?.hide_lightsensor) {
       if (this.CurrentAmbientLightLevel === undefined || Number.isNaN(this.CurrentAmbientLightLevel)) {

@@ -134,9 +134,13 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
           this.infoLog(`Webhook is configured to be received through MQTT.`);
 	  this.mqttClient.subscribe(`homebridge-switchbot/webhook/+`);
 	  this.mqttClient.on('message', async (topic: string, message) => {
-	    this.debugLog(`Received Webhook via MQTT: ${topic}=${message}`)
-	    const context = JSON.parse(message.toString());
-	    await this.webhookEventHandler[context.deviceMac]?.(context);
+	    try {
+	      this.debugLog(`Received Webhook via MQTT: ${topic}=${message}`)
+	      const context = JSON.parse(message.toString());
+	      await this.webhookEventHandler[context.deviceMac]?.(context);
+	    } catch (e: any) {
+	      this.errorLog(`Failed to handle webhook event. Error:${e}`);
+	    }
 	  })
 	}
       } catch (e) {
@@ -159,17 +163,21 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	  try {
 	    if (request.url === path && request.method === 'POST') {
 	      request.on('data', async (data) => {
-		const body = JSON.parse(data);
-		this.debugLog(`Received Webhook: ${JSON.stringify(body)}`)
-		if (this.config.options?.mqttURL) {
-		  const mac = body.context.deviceMac
-	            ?.toLowerCase()
-		    .match(/[\s\S]{1,2}/g)
-	            ?.join(':');
-		  const options = this.config.options?.mqttPubOptions || {};
-		  this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(body.context)}`, options);
+		try {
+		  const body = JSON.parse(data);
+		  this.debugLog(`Received Webhook: ${JSON.stringify(body)}`)
+		  if (this.config.options?.mqttURL) {
+		    const mac = body.context.deviceMac
+	              ?.toLowerCase()
+		      .match(/[\s\S]{1,2}/g)
+	              ?.join(':');
+		    const options = this.config.options?.mqttPubOptions || {};
+		    this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(body.context)}`, options);
+		  }
+		  await this.webhookEventHandler[body.context.deviceMac]?.(body.context);
+		} catch (e: any) {
+		  this.errorLog(`Failed to handle webhook event. Error:${e}`);
 		}
-		await this.webhookEventHandler[body.context.deviceMac]?.(body.context);
 	      })
 	      response.writeHead(200, {'Content-Type': 'text/plain'});
 	      response.end(`OK`);
