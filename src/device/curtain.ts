@@ -9,7 +9,6 @@ import { debounceTime, skipWhile, take, tap } from 'rxjs/operators';
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicChange } from 'homebridge';
 import { device, devicesConfig, serviceData, deviceStatus, ad, Devices } from '../settings';
 import { hostname } from 'os';
-import { Mutex } from 'await-semaphore';
 
 export class Curtain {
   // Services
@@ -225,7 +224,7 @@ export class Curtain {
     //regisiter webhook event handler
     if (this.device.webhook) {
       this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} is listening webhook.`);
-      this.platform.webhookEventHandler[this.device.deviceId] =	(async (context) => {this.WebhookQue.use(async () => {
+      this.platform.webhookEventHandler[this.device.deviceId] =	(async (context) => {
 	try {
 	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	  if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
@@ -236,33 +235,32 @@ export class Curtain {
 	    if (!this.Webhook_InMotion) {
 	      this.Webhook_InMotion = true;
 	      this.TargetPosition = Number(this.CurrentPosition) > 50 ? 0 : 100;
-	      await this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.TargetPosition, Number(this.TargetPosition));
-	      this.PositionState = Number(this.CurrentPosition) > 50 ?
-		this.platform.Characteristic.PositionState.DECREASING :
-		this.platform.Characteristic.PositionState.INCREASING;
-	      await this.windowCoveringService.updateCharacteristic(this.platform.Characteristic.PositionState, this.PositionState);
 	    }
 	    const currentPosition = this.CurrentPosition;
 	    this.CurrentPosition = 100 - context.slidePosition;
+	    this.PositionState = Number(this.CurrentPosition) < Number(currentPosition) ?
+	      this.platform.Characteristic.PositionState.DECREASING :
+	      this.platform.Characteristic.PositionState.INCREASING;
 	    await this.updateHomeKitCharacteristics();
-	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook: ${this.TargetPosition}, Current: ${currentPosition} Update: ${this.CurrentPosition}.`);
+	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook: ${context.slidePosition}, Current: ${currentPosition} Update: ${this.CurrentPosition}.`);
 	    
-	    const timeout = 5;
+	    const timeout = 10;
 	    await clearTimeout(this.setNewTargetTimer);
 	    this.setNewTargetTimer = await setTimeout(async () => {
+	      const currentPosition = this.CurrentPosition;
 	      this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
-	      await this.updateHomeKitCharacteristics();
 	      this.Webhook_InMotion = false;
-	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
+              await this.refreshStatus();
+	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced current position. Latest: ${currentPosition} Update: ${this.CurrentPosition}.`);
 	    }, timeout * 1000);
 	  }
 	} catch (e: any) {
 	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	}
-      })})
+      })
       // register grouped curtain to track moving
       if (this.device.group && !this.device.curtain?.disable_group) {
-	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = (async (context) => {this.WebhookQue.use(async () => {
+	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = (async (context) => {
 	  try {
 	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
@@ -270,19 +268,20 @@ export class Curtain {
 	    }
 	    this.lastWebhookEvent = {...context};
 	    if (!this.setNewTarget && this.Webhook_InMotion) {
-	      const timeout = 5;
+	      const timeout = 10;
 	      await clearTimeout(this.setNewTargetTimer);
 	      this.setNewTargetTimer = await setTimeout(async () => {
+		const currentPosition = this.CurrentPosition;
 		this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
-		await this.updateHomeKitCharacteristics();
 		this.Webhook_InMotion = false;
-		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} updates position state to STOPPED.`);
+		await this.refreshStatus();
+		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced current position. Latest: ${currentPosition} Update: ${this.CurrentPosition}.`);
 	      }, timeout * 1000);
 	    }
 	  } catch (e: any) {
 	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	  }
-	})})
+	})
       }
     }
     // Setup EVE history features

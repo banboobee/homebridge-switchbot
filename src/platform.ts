@@ -54,6 +54,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   debugMode!: boolean;
   platformLogging?: string;
   webhookEventListener: http.Server | null = null;
+  webhookQue: Mutex = new Mutex();
   mqttClient: MqttClient | null = null;
 
   public readonly fakegatoAPI: any;
@@ -137,7 +138,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 	    try {
 	      this.debugLog(`Received Webhook via MQTT: ${topic}=${message}`)
 	      const context = JSON.parse(message.toString());
-	      await this.webhookEventHandler[context.deviceMac]?.(context);
+	      await this.webhookQue.use(async () => this.webhookEventHandler[context.deviceMac]?.(context));
 	    } catch (e: any) {
 	      this.errorLog(`Failed to handle webhook event. Error:${e}`);
 	    }
@@ -174,7 +175,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
 		    const options = this.config.options?.mqttPubOptions || {};
 		    this.mqttClient?.publish(`homebridge-switchbot/webhook/${mac}`, `${JSON.stringify(body.context)}`, options);
 		  }
-		  await this.webhookEventHandler[body.context.deviceMac]?.(body.context);
+		  await this.webhookQue.use(async () => this.webhookEventHandler[body.context.deviceMac]?.(body.context));
 		} catch (e: any) {
 		  this.errorLog(`Failed to handle webhook event. Error:${e}`);
 		}
