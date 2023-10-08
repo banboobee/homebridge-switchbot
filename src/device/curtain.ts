@@ -223,8 +223,9 @@ export class Curtain {
 
     //regisiter webhook event handler
     if (this.device.webhook) {
+      const webhookTimeout = 10;
       this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} is listening webhook.`);
-      this.platform.webhookEventHandler[this.device.deviceId] =	(async (context) => {
+      this.platform.webhookEventHandler[this.device.deviceId] =	async (context) => {
 	try {
 	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	  if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
@@ -242,25 +243,24 @@ export class Curtain {
 	      this.platform.Characteristic.PositionState.DECREASING :
 	      this.platform.Characteristic.PositionState.INCREASING;
 	    await this.updateHomeKitCharacteristics();
-	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook: ${context.slidePosition}, Current: ${currentPosition} Update: ${this.CurrentPosition}.`);
+	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook:${context.slidePosition}, Current:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}.`);
 	    
-	    const timeout = 10;
 	    await clearTimeout(this.setNewTargetTimer);
 	    this.setNewTargetTimer = await setTimeout(async () => {
 	      const currentPosition = this.CurrentPosition;
 	      this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
 	      this.Webhook_InMotion = false;
               await this.refreshStatus();
-	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced current position. Latest: ${currentPosition} Update: ${this.CurrentPosition}.`);
-	    }, timeout * 1000);
+	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced current position. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}.`);
+	    }, webhookTimeout * 1000);
 	  }
 	} catch (e: any) {
 	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	}
-      })
+      }
       // register grouped curtain to track moving
       if (this.device.group && !this.device.curtain?.disable_group) {
-	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = (async (context) => {
+	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = async (context) => {
 	  try {
 	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
@@ -268,22 +268,22 @@ export class Curtain {
 	    }
 	    this.lastWebhookEvent = {...context};
 	    if (!this.setNewTarget && this.Webhook_InMotion) {
-	      const timeout = 10;
 	      await clearTimeout(this.setNewTargetTimer);
 	      this.setNewTargetTimer = await setTimeout(async () => {
 		const currentPosition = this.CurrentPosition;
 		this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
 		this.Webhook_InMotion = false;
 		await this.refreshStatus();
-		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced current position. Latest: ${currentPosition} Update: ${this.CurrentPosition}.`);
-	      }, timeout * 1000);
+		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced current position. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}.`);
+	      }, webhookTimeout * 1000);
 	    }
 	  } catch (e: any) {
 	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	  }
-	})
+	}
       }
     }
+
     // Setup EVE history features
     this.setupHistoryService(device);
   }

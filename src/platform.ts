@@ -132,7 +132,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
         });
 	if (!this.config.options?.webhookURL) {
 	  // receive webhook events via MQTT
-          this.infoLog(`Webhook is configured to be received through MQTT.`);
+          this.infoLog(`Webhook is configured to be received through ${this.config.options.mqttURL}/homebridge-switchbot/webhook.`);
 	  this.mqttClient.subscribe(`homebridge-switchbot/webhook/+`);
 	  this.mqttClient.on('message', async (topic: string, message) => {
 	    try {
