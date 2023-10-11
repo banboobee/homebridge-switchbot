@@ -9,6 +9,7 @@ import { debounceTime, skipWhile, take, tap } from 'rxjs/operators';
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicChange } from 'homebridge';
 import { device, devicesConfig, serviceData, deviceStatus, ad, Devices } from '../settings';
 import { hostname } from 'os';
+import { Mutex } from 'await-semaphore';
 
 export class Curtain {
   // Services
@@ -79,6 +80,7 @@ export class Curtain {
   // Webhook 
   lastWebhookEvent: {[x: string]: any} = {};
   Webhook_InMotion: boolean = false;
+  deviceQue: Mutex = new Mutex();
 
   constructor(
     private readonly platform: SwitchBotPlatform,
@@ -183,16 +185,16 @@ export class Curtain {
 
     // Start an update interval
     interval(this.deviceRefreshRate * 1000)
-      .pipe(skipWhile(() => this.curtainUpdateInProgress))
+      .pipe(skipWhile(() => this.curtainUpdateInProgress || this.Webhook_InMotion))
       .subscribe(async () => {
-        await this.refreshStatus();
+        await this.deviceQue.use(async () => this.refreshStatus());
       });
 
     // update slide progress
     interval(this.updateRate * 1000)
       //.pipe(skipWhile(() => this.curtainUpdateInProgress))
       .subscribe(async () => {
-        if (this.PositionState === this.platform.Characteristic.PositionState.STOPPED) {
+        if (this.PositionState === this.platform.Characteristic.PositionState.STOPPED || this.Webhook_InMotion) {
           return;
         }
         this.debugLog(`${this.device.deviceType}: ${accessory.displayName} Refresh Status When Moving, PositionState: ${this.PositionState}`);
@@ -225,7 +227,7 @@ export class Curtain {
     if (this.device.webhook) {
       const webhookTimeout = 10;
       this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} is listening webhook.`);
-      this.platform.webhookEventHandler[this.device.deviceId] =	async (context) => {
+      this.platform.webhookEventHandler[this.device.deviceId] =	async (context) => {this.deviceQue.use(async () => {
 	try {
 	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	  if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
@@ -243,7 +245,7 @@ export class Curtain {
 	      this.platform.Characteristic.PositionState.DECREASING :
 	      this.platform.Characteristic.PositionState.INCREASING;
 	    await this.updateHomeKitCharacteristics();
-	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook. Webhook:${context.slidePosition}, Current:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}.`);
+	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook:${context.slidePosition}. Current:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
 	    
 	    await clearTimeout(this.setNewTargetTimer);
 	    this.setNewTargetTimer = await setTimeout(async () => {
@@ -251,16 +253,16 @@ export class Curtain {
 	      this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
 	      this.Webhook_InMotion = false;
               await this.refreshStatus();
-	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced current position. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}.`);
+	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced status. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
 	    }, webhookTimeout * 1000);
 	  }
 	} catch (e: any) {
 	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	}
-      }
+      })}
       // register grouped curtain to track moving
       if (this.device.group && !this.device.curtain?.disable_group) {
-	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = async (context) => {
+	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = async (context) => {this.deviceQue.use(async () => {
 	  try {
 	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
 	    if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
@@ -274,13 +276,13 @@ export class Curtain {
 		this.PositionState = this.platform.Characteristic.PositionState.STOPPED;
 		this.Webhook_InMotion = false;
 		await this.refreshStatus();
-		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced current position. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}.`);
+		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced status. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
 	      }, webhookTimeout * 1000);
 	    }
 	  } catch (e: any) {
 	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
 	  }
-	}
+	})}
       }
     }
 
@@ -542,9 +544,6 @@ export class Curtain {
   }
 
   async refreshStatus(): Promise<void> {
-    if (this.Webhook_InMotion) {
-      return;
-    }
     if (!this.device.enableCloudService && this.OpenAPI) {
       this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} refreshStatus enableCloudService: ${this.device.enableCloudService}`);
     } else if (this.BLE) {
@@ -1179,7 +1178,7 @@ export class Curtain {
       default:
         this.infoLog(
           `${this.device.deviceType}: ${this.accessory.displayName} Unknown statusCode: ` +
-          `${statusCode}, Submit Bugs Here: ' + 'https://tinyurl.com/SwitchBotBug`,
+          `${statusCode}, Submit Bugs Here: ` + `https://tinyurl.com/SwitchBotBug`,
         );
     }
   }
