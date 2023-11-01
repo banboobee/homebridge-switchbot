@@ -59,7 +59,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
   public readonly fakegatoAPI: any;
   public readonly eve: any;
   public readonly BLEQue: Mutex = new Mutex();
-  public readonly webhookEventHandler: {[x: string]: (context: {[x: string]: any}) => void} = {};
+  public readonly webhookEventHandler: { [x: string]: (context: { [x: string]: any }) => void } = {};
 
   constructor(
     public readonly log: Logger,
