@@ -632,10 +632,18 @@ export class Curtain {
     this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLE Address: ${this.device.bleMac}`);
     this.getCustomBLEAddress(switchbot);
     // Start to monitor advertisement packets
+    let model: string;
+    switch (this.device.configDeviceType) {
+      case 'Curtain3':
+        model = '{';
+        break;
+      default:
+        model = 'c';
+    }
     if (switchbot !== false) {
       return await switchbot
         .startScan({
-          model: 'c',
+          model: model,
           id: this.device.bleMac,
         })
         .then(async () => {
