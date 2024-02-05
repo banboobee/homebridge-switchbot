@@ -337,8 +337,7 @@ export class Meter {
           //id: this.device.bleMac,
         })
         .then(async () => {
-          // Set an event hander
-	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} start to listen BLE packets.`);
+          // Set an event handler
           switchbot.onadvertisement = async (ad: ad) => {
 	    const accessory = this.platform.accessories.find(x => x.context.device.bleMac === ad.address);
 	    if (accessory) {
@@ -414,15 +413,12 @@ export class Meter {
   async openAPIRefreshStatus(): Promise<void> {
     this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} openAPIRefreshStatus`);
     try {
-      const { body, statusCode, headers } = await request(`${Devices}/${this.device.deviceId}/status`, {
+      const { body, statusCode } = await request(`${Devices}/${this.device.deviceId}/status`, {
         headers: this.platform.generateHeaders(),
       });
-      this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} body: ${JSON.stringify(body)}`);
       this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} statusCode: ${statusCode}`);
-      this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} headers: ${JSON.stringify(headers)}`);
       const deviceStatus: any = await body.json();
       this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} deviceStatus: ${JSON.stringify(deviceStatus)}`);
-      this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} deviceStatus body: ${JSON.stringify(deviceStatus.body)}`);
       this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} deviceStatus statusCode: ${deviceStatus.statusCode}`);
       if ((statusCode === 200 || statusCode === 100) && (deviceStatus.statusCode === 200 || deviceStatus.statusCode === 100)) {
         this.debugErrorLog(`${this.device.deviceType}: ${this.accessory.displayName} `
@@ -535,7 +531,7 @@ export class Meter {
   }
 
   /*
-   * Setup MQTT hadler if URL is specifed.
+   * Setup MQTT hadler if URL is specified.
    */
   async setupMqtt(device: device & devicesConfig): Promise<void> {
     if (device.mqttURL) {
@@ -599,7 +595,8 @@ export class Meter {
   }
 
   async BLERefreshConnection(switchbot: any): Promise<void> {
-    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} wasn't able to establish BLE Connection, node-switchbot: ${switchbot}`);
+    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} wasn't able to establish BLE Connection, node-switchbot:`
+      + ` ${JSON.stringify(switchbot)}`);
     if (this.platform.config.credentials?.token && this.device.connectionType === 'BLE/OpenAPI') {
       this.warnLog(`${this.device.deviceType}: ${this.accessory.displayName} Using OpenAPI Connection to Refresh Status`);
       await this.openAPIRefreshStatus();
@@ -751,6 +748,9 @@ export class Meter {
     }
     if (device.scanDuration !== undefined) {
       config['scanDuration'] = device.scanDuration;
+    }
+    if (device.webhook !== undefined) {
+      config['webhook'] = device.webhook;
     }
     if (Object.entries(config).length !== 0) {
       this.debugWarnLog(`${this.device.deviceType}: ${this.accessory.displayName} Config: ${JSON.stringify(config)}`);
