@@ -330,7 +330,7 @@ export class Meter {
     this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLE Address: ${this.device.bleMac}`);
     this.getCustomBLEAddress(switchbot);
     // Start to monitor advertisement packets
-    (async () => {
+    await (async () => {
       await switchbot.startScan({
         model: 'T',
         //id: this.device.bleMac,
