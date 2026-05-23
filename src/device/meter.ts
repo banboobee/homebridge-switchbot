@@ -116,9 +116,9 @@ export class Meter {
           minStep: 0.1,
         })
         .onGet(() => {
-	  if (!Number.isFinite(this.CurrentTemperature)) {
-	    throw new this.hap.HapStatusError(this.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
-	  }
+          if (!Number.isFinite(this.CurrentTemperature)) {
+            throw new this.hap.HapStatusError(this.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
+          }
           return this.CurrentTemperature!;
         });
     } else {
@@ -145,10 +145,10 @@ export class Meter {
         .setProps({
           minStep: 0.1,
         })
-	.onGet(() => {
-	  if (!Number.isFinite(this.CurrentRelativeHumidity)) {
-	    throw new this.hap.HapStatusError(this.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
-	  }
+        .onGet(() => {
+          if (!Number.isFinite(this.CurrentRelativeHumidity)) {
+            throw new this.hap.HapStatusError(this.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
+          }
           return this.CurrentRelativeHumidity!;
         });
     } else {
@@ -225,9 +225,9 @@ export class Meter {
     if (Number.isFinite(this.BLE_BatteryLevel)) {
       this.BatteryLevel = Number(this.BLE_BatteryLevel);
       if (this.BatteryLevel < 15) {
-	this.StatusLowBattery = this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW;
+        this.StatusLowBattery = this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW;
       } else {
-	this.StatusLowBattery = this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+        this.StatusLowBattery = this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
       }
     }
     this.debugLog(`${this.accessory.displayName} BatteryLevel: ${this.BatteryLevel}, StatusLowBattery: ${this.StatusLowBattery}`);
@@ -296,24 +296,24 @@ export class Meter {
       this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} refreshStatus enableCloudService: ${this.device.enableCloudService}`);
     } else if (this.BLE) {
       this.platform.BLEQue.use(async () => {
-	return new Promise(async (resolve, reject) => {
-	  // set timeout long enough. starscan() dosn't return promise sometimes
-	  const timeout = setTimeout(() => {
-	    //reject(new Error(`timed out of ${this.scanDuration+1} seconds.`));
-	    reject(new Error(`timed out of 1 minute.`));
-	  }, 60*1000); //this.scanDuration * 1000 + 1000);
-	  this.BLERefreshStatus()
-	    .then(() => {
-	      resolve(true);
-	    }).catch((e) => {
-	      reject(e);
-	    }).finally(() => {
-	      clearTimeout(timeout);
-	    })
-	}).catch((e) => {
-	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLErefreshStatus: ${e}`);
-	})
-      })
+        return new Promise((resolve, reject) => {
+          // set timeout long enough. starscan() dosn't return promise sometimes
+          const timeout = setTimeout(() => {
+            //reject(new Error(`timed out of ${this.scanDuration+1} seconds.`));
+            reject(new Error('timed out of 1 minute.'));
+          }, 60*1000); //this.scanDuration * 1000 + 1000);
+          this.BLERefreshStatus()
+            .then(() => {
+              resolve(true);
+            }).catch((e) => {
+              reject(e);
+            }).finally(() => {
+              clearTimeout(timeout);
+            });
+        }).catch((e) => {
+          this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLErefreshStatus: ${e}`);
+        });
+      });
     } else if (this.OpenAPI && this.platform.config.credentials?.token) {
       await this.openAPIRefreshStatus();
     } else {
@@ -346,25 +346,25 @@ export class Meter {
       // Set an event handler
       switchbot.onadvertisement = (ad: any) => {
         this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} ${JSON.stringify(ad, null, '  ')}`);
-	const accessory = this.platform.accessories.find(x => x.context.device.bleMac === ad.address);
-	if (accessory) {
-	  // use context area to cache the advertisement packets.
-	  const meter = accessory.context.device;
-	  if (meter?.cache === undefined || meter.cache.timestamp! <= 0) {
-	    meter.cache = {
-	      timestamp: Date.now(),
-	      address: ad.address,
-	      serviceData: ad.serviceData
-	    };
-	  }
-	}
+        const accessory = this.platform.accessories.find(x => x.context.device.bleMac === ad.address);
+        if (accessory) {
+          // use context area to cache the advertisement packets.
+          const meter = accessory.context.device;
+          if (meter?.cache === undefined || meter.cache.timestamp! <= 0) {
+            meter.cache = {
+              timestamp: Date.now(),
+              address: ad.address,
+              serviceData: ad.serviceData,
+            };
+          }
+        }
       };
       // Wait 1 seconds
       await switchbot.wait(this.scanDuration * 1000);
       // Stop to monitor
       await switchbot.stopScan();
       if (device.cache?.timestamp !== undefined && device.cache.timestamp > 0) {
-	device.cache.timestamp *= -1;
+        device.cache.timestamp *= -1;
         this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} address: ${device.cache!.address}, model: ${device.cache!.serviceData.model}`);
         if (this.device.bleMac === device.cache!.address && device.cache!.serviceData.model === 'T') {
           this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} serviceData: ${JSON.stringify(device.cache!.serviceData)}`);
@@ -380,7 +380,7 @@ export class Meter {
           this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} serviceData: ${JSON.stringify(device.cache!.serviceData)}`);
         }
       } else {
-	// didn't receive BLE advertisement packets within deviceRefreshRate period.
+        // didn't receive BLE advertisement packets within deviceRefreshRate period.
         this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus failed to scan. Keeps last values.`);
       }
       // Update HomeKit
@@ -747,7 +747,7 @@ export class Meter {
       default:
         this.infoLog(
           `${this.device.deviceType}: ${this.accessory.displayName} Unknown statusCode: ` +
-          `${statusCode}, Submit Bugs Here: ` + `https://tinyurl.com/SwitchBotBug`,
+          `${statusCode}, Submit Bugs Here: ` + 'https://tinyurl.com/SwitchBotBug',
         );
     }
   }
@@ -803,9 +803,9 @@ export class Meter {
     // bleMac for context devices to cache while scanning
     this.accessory.context.device.bleMac =
       this.accessory.context.device
-      .deviceId!.match(/.{1,2}/g)!
-      .join(':')
-      .toLowerCase();
+        .deviceId!.match(/.{1,2}/g)!
+        .join(':')
+        .toLowerCase();
     //this.debugLog(`bleMac:${this.accessory.context.device.bleMac}`);
   }
 

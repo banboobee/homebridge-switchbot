@@ -81,7 +81,7 @@ export class Curtain {
   // EVE history service handler
   historyService: any = null;
 
-  // Webhook 
+  // Webhook
   lastWebhookEvent: {[x: string]: any} = {};
   Webhook_InMotion: boolean = false;
   deviceQue: Mutex = new Mutex();
@@ -263,62 +263,62 @@ export class Curtain {
     if (this.device.webhook) {
       const webhookTimeout = 10;
       this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} is listening webhook.`);
-      this.platform.webhookEventHandler[this.device.deviceId] =	async (context) => {this.deviceQue.use(async () => {
-	try {
-	  this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
-	  if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
-	    return;
-	  }
-	  this.lastWebhookEvent = {...context};
-	  if (!this.setNewTarget) {
-	    if (!this.Webhook_InMotion) {
-	      this.Webhook_InMotion = true;
-	      this.TargetPosition = Number(this.CurrentPosition) > 50 ? 0 : 100;
-	    }
-	    const currentPosition = this.CurrentPosition;
-	    this.CurrentPosition = 100 - context.slidePosition;
-	    this.PositionState = Number(this.CurrentPosition) < Number(currentPosition) ?
-	      this.hap.Characteristic.PositionState.DECREASING :
-	      this.hap.Characteristic.PositionState.INCREASING;
-	    await this.updateHomeKitCharacteristics();
-	    this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook:${context.slidePosition}. Current:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
-	    
-	    await clearTimeout(this.setNewTargetTimer);
-	    this.setNewTargetTimer = await setTimeout(async () => {
-	      const currentPosition = this.CurrentPosition;
-	      this.PositionState = this.hap.Characteristic.PositionState.STOPPED;
-	      this.Webhook_InMotion = false;
+      this.platform.webhookEventHandler[this.device.deviceId] = async (context) => {this.deviceQue.use(async () => {
+        try {
+          this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+          if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
+            return;
+          }
+          this.lastWebhookEvent = {...context};
+          if (!this.setNewTarget) {
+            if (!this.Webhook_InMotion) {
+              this.Webhook_InMotion = true;
+              this.TargetPosition = Number(this.CurrentPosition) > 50 ? 0 : 100;
+            }
+            const currentPosition = this.CurrentPosition;
+            this.CurrentPosition = 100 - context.slidePosition;
+            this.PositionState = Number(this.CurrentPosition) < Number(currentPosition) ?
+              this.hap.Characteristic.PositionState.DECREASING :
+              this.hap.Characteristic.PositionState.INCREASING;
+            await this.updateHomeKitCharacteristics();
+            this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} received webhook:${context.slidePosition}. Current:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
+
+            await clearTimeout(this.setNewTargetTimer);
+            this.setNewTargetTimer = await setTimeout(async () => {
+              const currentPosition = this.CurrentPosition;
+              this.PositionState = this.hap.Characteristic.PositionState.STOPPED;
+              this.Webhook_InMotion = false;
               await this.refreshStatus();
-	      this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced status. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
-	    }, webhookTimeout * 1000);
-	  }
-	} catch (e: any) {
-	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
-	}
-      })}
+              this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced status. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
+            }, webhookTimeout * 1000);
+          }
+        } catch (e: any) {
+          this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
+        }
+      });};
       // register grouped curtain to track moving
       if (this.device.group && !this.device.curtain?.disable_group) {
-	this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = async (context) => {this.deviceQue.use(async () => {
-	  try {
-	    this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
-	    if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
-	      return;
-	    }
-	    this.lastWebhookEvent = {...context};
-	    if (!this.setNewTarget && this.Webhook_InMotion) {
-	      await clearTimeout(this.setNewTargetTimer);
-	      this.setNewTargetTimer = await setTimeout(async () => {
-		const currentPosition = this.CurrentPosition;
-		this.PositionState = this.hap.Characteristic.PositionState.STOPPED;
-		this.Webhook_InMotion = false;
-		await this.refreshStatus();
-		this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced status. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
-	      }, webhookTimeout * 1000);
-	    }
-	  } catch (e: any) {
-	    this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
-	  }
-	})}
+        this.platform.webhookEventHandler[this.device.curtainDevicesIds?.find(x => x !== this.device.deviceId) || ''] = async (context) => {this.deviceQue.use(async () => {
+          try {
+            this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} received Webhook: ${JSON.stringify(context)}`);
+            if (context.timeOfSample < this.lastWebhookEvent?.timeOfSample) {
+              return;
+            }
+            this.lastWebhookEvent = {...context};
+            if (!this.setNewTarget && this.Webhook_InMotion) {
+              await clearTimeout(this.setNewTargetTimer);
+              this.setNewTargetTimer = await setTimeout(async () => {
+                const currentPosition = this.CurrentPosition;
+                this.PositionState = this.hap.Characteristic.PositionState.STOPPED;
+                this.Webhook_InMotion = false;
+                await this.refreshStatus();
+                this.infoLog(`${this.device.deviceType}: ${this.accessory.displayName} synced status. Latest:${currentPosition} Update:${this.CurrentPosition} Target:${this.TargetPosition} State:${this.PositionState}`);
+              }, webhookTimeout * 1000);
+            }
+          } catch (e: any) {
+            this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} failed to handle webhook. Received: ${JSON.stringify(context)} Error: ${e}`);
+          }
+        });};
       }
     }
 
@@ -585,24 +585,24 @@ export class Curtain {
       this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} refreshStatus enableCloudService: ${this.device.enableCloudService}`);
     } else if (this.BLE) {
       this.platform.BLEQue.use(async () => {
-	return new Promise(async (resolve, reject) => {
-	  // set timeout long enough. starscan() dosn't return promise sometimes
-	  const timeout = setTimeout(() => {
-	    //reject(new Error(`timed out of ${this.scanDuration+1} seconds.`));
-	    reject(new Error(`timed out of 1 minute.`));
-	  }, 60*1000); //this.scanDuration * 1000 + 1000);
-	  this.BLERefreshStatus()
-	    .then(() => {
-	      resolve(true);
-	    }).catch((e) => {
-	      reject(e);
-	    }).finally(() => {
-	      clearTimeout(timeout);
-	    })
-	}).catch((e) => {
-	  this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLErefreshStatus: ${e}`);
-	})
-      })
+        return new Promise((resolve, reject) => {
+          // set timeout long enough. starscan() dosn't return promise sometimes
+          const timeout = setTimeout(() => {
+            //reject(new Error(`timed out of ${this.scanDuration+1} seconds.`));
+            reject(new Error('timed out of 1 minute.'));
+          }, 60*1000); //this.scanDuration * 1000 + 1000);
+          this.BLERefreshStatus()
+            .then(() => {
+              resolve(true);
+            }).catch((e) => {
+              reject(e);
+            }).finally(() => {
+              clearTimeout(timeout);
+            });
+        }).catch((e) => {
+          this.errorLog(`${this.device.deviceType}: ${this.accessory.displayName} BLErefreshStatus: ${e}`);
+        });
+      });
     } else if (this.OpenAPI && this.platform.config.credentials?.token) {
       await this.openAPIRefreshStatus();
     } else {
@@ -617,7 +617,7 @@ export class Curtain {
   async BLERefreshStatus(): Promise<void> {
     this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLERefreshStatus`);
     const switchbot = await this.platform.connectBLE();
-    let scaned = false;
+    // let scaned = false;
     // Convert to BLE Address
     this.device.bleMac = this.device
       .deviceId!.match(/.{1,2}/g)!
@@ -1304,7 +1304,7 @@ export class Curtain {
       default:
         this.infoLog(
           `${this.device.deviceType}: ${this.accessory.displayName} Unknown statusCode: ` +
-          `${statusCode}, Submit Bugs Here: ` + `https://tinyurl.com/SwitchBotBug`,
+          `${statusCode}, Submit Bugs Here: ` + 'https://tinyurl.com/SwitchBotBug',
         );
     }
   }
