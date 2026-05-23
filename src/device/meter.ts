@@ -116,6 +116,9 @@ export class Meter {
           minStep: 0.1,
         })
         .onGet(() => {
+	  if (!Number.isFinite(this.CurrentTemperature)) {
+	    throw new this.hap.HapStatusError(this.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
+	  }
           return this.CurrentTemperature!;
         });
     } else {
@@ -142,7 +145,10 @@ export class Meter {
         .setProps({
           minStep: 0.1,
         })
-        .onGet(() => {
+	.onGet(() => {
+	  if (!Number.isFinite(this.CurrentRelativeHumidity)) {
+	    throw new this.hap.HapStatusError(this.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
+	  }
           return this.CurrentRelativeHumidity!;
         });
     } else {
@@ -216,23 +222,25 @@ export class Meter {
     this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} BLEparseStatus`);
 
     // BatteryLevel
-    this.BatteryLevel = Number(this.BLE_BatteryLevel);
-    if (this.BatteryLevel < 15) {
-      this.StatusLowBattery = this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW;
-    } else {
-      this.StatusLowBattery = this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+    if (Number.isFinite(this.BLE_BatteryLevel)) {
+      this.BatteryLevel = Number(this.BLE_BatteryLevel);
+      if (this.BatteryLevel < 15) {
+	this.StatusLowBattery = this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW;
+      } else {
+	this.StatusLowBattery = this.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+      }
     }
     this.debugLog(`${this.accessory.displayName} BatteryLevel: ${this.BatteryLevel}, StatusLowBattery: ${this.StatusLowBattery}`);
 
     // CurrentRelativeHumidity
-    if (!this.device.meter?.hide_humidity) {
+    if (!this.device.meter?.hide_humidity && Number.isFinite(this.BLE_CurrentRelativeHumidity!)) {
       this.CurrentRelativeHumidity = this.BLE_CurrentRelativeHumidity!;
       this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} Humidity: ${this.CurrentRelativeHumidity}%`);
     }
 
     // CurrentTemperature
-    if (!this.device.meter?.hide_temperature) {
-      this.BLE_Celsius < 0 ? 0 : this.BLE_Celsius > 100 ? 100 : this.BLE_Celsius;
+    if (!this.device.meter?.hide_temperature && Number.isFinite(this.BLE_Celsius)) {
+      // this.BLE_Celsius < 0 ? 0 : this.BLE_Celsius > 100 ? 100 : this.BLE_Celsius;
       this.CurrentTemperature = this.BLE_Celsius;
       this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} Temperature: ${this.CurrentTemperature}°c`);
     }
