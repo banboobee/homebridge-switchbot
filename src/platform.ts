@@ -40,7 +40,7 @@ import { Mutex } from 'await-semaphore';
 import asyncmqtt from 'async-mqtt';
 import crypto, { randomUUID } from 'crypto';
 import { readFileSync, writeFileSync } from 'fs';
-import hbLib from 'homebridge-lib';
+import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes';
 
 
 
@@ -106,7 +106,7 @@ export class SwitchBotPlatform implements DynamicPlatformPlugin {
     }
 
     // import fakegato-history module and EVE characteristics
-    const { EveHomeKitTypes } = hbLib;
+    // const { EveHomeKitTypes } = hbLib;
     this.fakegatoAPI = fakegato(api);
     this.eve = new EveHomeKitTypes(api);
 
