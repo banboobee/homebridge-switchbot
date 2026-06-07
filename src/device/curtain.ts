@@ -644,7 +644,7 @@ export class Curtain {
       switchbot.onadvertisement = (ad: any) => {
         this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} ${JSON.stringify(ad, null, '  ')}`);
         this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} address: ${ad.address}, model: ${ad.serviceData.model}`);
-        if (this.device.bleMac === ad.address && ad.serviceData.model === 'c') {
+        if (this.device.bleMac === ad.address && ad.serviceData.model === model) {
           this.debugLog(`${this.device.deviceType}: ${this.accessory.displayName} serviceData: ${JSON.stringify(ad.serviceData)}`);
           this.BLE_Calibration = ad.serviceData.calibration;
           this.BLE_BatteryLevel = ad.serviceData.battery;
